@@ -28,7 +28,9 @@ def _get_con() -> duckdb.DuckDBPyConnection:
     con = duckdb.connect()
     con.execute("INSTALL httpfs; LOAD httpfs;")
     con.execute("INSTALL spatial; LOAD spatial;")
-    con.execute("SET s3_region='us-east-1';")
+    con.execute("SET s3_region='us-west-2';")
+    con.execute("SET s3_access_key_id='';")
+    con.execute("SET s3_secret_access_key='';")
     return con
 
 

@@ -28,7 +28,7 @@ POI_MATCH_RADIUS_M = 50     # meters for Overture proximity match
 UTM_CRS = "EPSG:32610"      # UTM zone 10N for San Francisco
 WGS84_CRS = "EPSG:4326"
 
-OVERTURE_RELEASE = "2024-11-13.0"
+OVERTURE_RELEASE = "2026-04-15.0"
 OVERTURE_S3_BASE = f"s3://overturemaps-us-east-1/release/{OVERTURE_RELEASE}"
 
 DATA_RAW = "data/raw"
