@@ -72,7 +72,7 @@ PROCESS
   embeddings.py → store embeddings + GPS metadata in OpenSearch
                   → data/processed/indexed_segments.json
 
-  pegasus.py    → 5–10s clips → Bedrock/Pegasus 1.2
+  pegasus.py    → 5–10s video clips (VIDEO input only) → Bedrock/Pegasus 1.2
                   → {name, category, condition}
                   → data/processed/descriptions.json
         ↓
@@ -123,21 +123,24 @@ GET /{image_id}?fields=thumb_2048_url    → download frame image
 ### TwelveLabs via AWS Bedrock (process stage)
 
 ```python
-# Step 1: upload frame to S3 workshop bucket
+# Step 1: upload to S3 workshop bucket
+# Marengo accepts images or video; Pegasus accepts VIDEO ONLY (not images)
 s3.upload_file(local_path, "twelvelabs-bedrock-workshop-workshopbucket-f4zu1jcvakku", s3_key)
 
-# Step 2: Marengo 3.0 — generate embedding
+# Step 2: Marengo — generate embedding from a single frame (image)
 bedrock.invoke_model(
-    modelId="twelvelabs.marengo-retrieval-2-7@v1",
+    modelId="twelvelabs.marengo-embed-2-7-v1:0",
     body={"inputType": "IMAGE", "inputS3Uri": s3_uri}
-)  # → float[1024]
+)  # → float[] embedding (async via StartAsyncInvoke for large batches)
 
-# Step 3: Pegasus 1.2 — structured description
+# Step 3: Pegasus — structured description from a short video clip (5–10s)
+# Must be a video file, not a still image
 bedrock.invoke_model(
-    modelId="twelvelabs.pegasus-1-2@v1",
-    body={"inputType": "IMAGE", "inputS3Uri": s3_uri,
+    modelId="twelvelabs.pegasus-1-2-v1:0",
+    body={"inputType": "VIDEO", "inputS3Uri": clip_s3_uri,
           "prompt": "Describe any business signage, name, and category visible."}
 )  # → text → parse into {name, category, condition}
+# Use InvokeModelWithResponseStream for long responses
 ```
 
 ### OpenSearch Serverless (process + analyze stages)
@@ -224,9 +227,8 @@ S3_VECTOR_BUCKET = "twelvelabs-aws-vectorbucket-tkjkgf05ulh8"
 OPENSEARCH_ENDPOINT = "https://ee6qftmunca9x55uvgj5.us-east-1.aoss.amazonaws.com"
 OPENSEARCH_INDEX = "geostl-embeddings"
 
-# Verify exact model IDs from Bedrock console or hackathon workshop docs
-MARENGO_MODEL_ID = "twelvelabs.marengo-retrieval-2-7@v1"
-PEGASUS_MODEL_ID = "twelvelabs.pegasus-1-2@v1"
+MARENGO_MODEL_ID = "twelvelabs.marengo-embed-2-7-v1:0"   # video/image/text/audio → embeddings
+PEGASUS_MODEL_ID = "twelvelabs.pegasus-1-2-v1:0"          # video only → text
 
 MAPILLARY_ACCESS_TOKEN = ""   # loaded from .env
 FRAME_SAMPLE_INTERVAL = 5     # seconds between sampled frames
