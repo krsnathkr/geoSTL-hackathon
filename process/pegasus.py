@@ -312,6 +312,8 @@ def process_all_sequences(
         client = get_bedrock_client()
 
     all_results = []
+    out_path = os.path.join(output_dir, output_filename)
+
     for seq in sequences:
         seq_id = seq["sequence_id"]
         frames = seq["frames"]
@@ -351,10 +353,11 @@ def process_all_sequences(
             )
         except Exception as exc:
             logger.error("Failed to process sequence %s: %s", seq_id, exc)
+            continue
 
-    out_path = os.path.join(output_dir, output_filename)
-    with open(out_path, "w") as f:
-        json.dump(all_results, f, indent=2)
+        with open(out_path, "w") as f:
+            json.dump(all_results, f, indent=2)
+
     logger.info("Saved descriptions → %s (%d sequences)", out_path, len(all_results))
 
     return all_results
