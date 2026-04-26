@@ -114,6 +114,9 @@ def frames_to_clip(
         "-i", concat_path,
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
         "-r", str(fps),
+        # Scale down to max 1280px wide (Pegasus rejects 4K), keep aspect ratio,
+        # ensure dimensions are divisible by 2 for yuv420p compatibility.
+        "-vf", "scale='min(1280,iw)':-2",
         "-movflags", "+faststart",
         output_path,
     ]

@@ -1,1 +1,131 @@
-[]
+[
+  {
+    "sequence_id": "R59u3JKTxS6X2yaCnc62MA",
+    "clip_s3_uri": "s3://twelvelabs-bedrock-workshop-workshopbucket-f4zu1jcvakku/clips/R59u3JKTxS6X2yaCnc62MA.mp4",
+    "name": "sidewalk_segment",
+    "category": "sidewalk",
+    "condition": "good",
+    "sidewalk_presence": "present",
+    "sidewalk_width_m": null,
+    "curb_ramp_status": "unclear",
+    "obstructions": [],
+    "hazards": [],
+    "crossing_features": [
+      "crosswalk",
+      "tactile_paving"
+    ],
+    "description": "The video shows a clear sidewalk with a crosswalk and tactile paving. The sidewalk appears to be in good condition, with no visible obstructions or hazards. The presence of curb ramps is unclear, and the width cannot be estimated from the video.",
+    "lat": 39.99607528571429,
+    "lon": -105.26103814285715,
+    "frame_ids": [
+      "233457715200540",
+      "270333451420084",
+      "460785695003542",
+      "2941342139454653",
+      "325067542387168",
+      "2554908068148829",
+      "506870223675819"
+    ],
+    "raw_response": "{\"name\": \"sidewalk_segment\", \"category\": \"sidewalk\", \"condition\": \"good\", \"sidewalk_presence\": \"present\", \"sidewalk_width_m\": null, \"curb_ramp_status\": \"unclear\", \"obstructions\": [], \"hazards\": [], \"crossing_features\": [\"crosswalk\", \"tactile_paving\"], \"description\": \"The video shows a clear sidewalk with a crosswalk and tactile paving. The sidewalk appears to be in good condition, with no visible obstructions or hazards. The presence of curb ramps is unclear, and the width cannot be estimated from the video.\"}"
+  },
+  {
+    "sequence_id": "_tjc6MqcLS-K7yGuvFtKTA",
+    "clip_s3_uri": "s3://twelvelabs-bedrock-workshop-workshopbucket-f4zu1jcvakku/clips/_tjc6MqcLS-K7yGuvFtKTA.mp4",
+    "name": "sidewalk_segment",
+    "category": "sidewalk",
+    "condition": "good",
+    "sidewalk_presence": "present",
+    "sidewalk_width_m": null,
+    "curb_ramp_status": "unclear",
+    "obstructions": [],
+    "hazards": [],
+    "crossing_features": [
+      "crosswalk"
+    ],
+    "description": "The video shows a clear sidewalk segment with a crosswalk visible. The sidewalk appears to be in good condition without any visible obstructions or hazards. The presence of a bus stop shelter suggests accessibility features, but curb ramp status is unclear. The width of the sidewalk cannot be accurately estimated from the video.",
+    "lat": 39.9960595,
+    "lon": -105.26103616666667,
+    "frame_ids": [
+      "751304075555264",
+      "842384796351651",
+      "1400817773615198",
+      "521243898872491",
+      "280042640439066",
+      "251234683171930"
+    ],
+    "raw_response": "{\"name\": \"sidewalk_segment\", \"category\": \"sidewalk\", \"condition\": \"good\", \"sidewalk_presence\": \"present\", \"sidewalk_width_m\": null, \"curb_ramp_status\": \"unclear\", \"obstructions\": [], \"hazards\": [], \"crossing_features\": [\"crosswalk\"], \"description\": \"The video shows a clear sidewalk segment with a crosswalk visible. The sidewalk appears to be in good condition without any visible obstructions or hazards. The presence of a bus stop shelter suggests accessibility features, but curb ramp status is unclear. The width of the sidewalk cannot be accurately estimated from the video.\"}"
+  },
+  {
+    "sequence_id": "gGMB4v3t3v9OVF7GDnnd7g",
+    "clip_s3_uri": "s3://twelvelabs-bedrock-workshop-workshopbucket-f4zu1jcvakku/clips/gGMB4v3t3v9OVF7GDnnd7g.mp4",
+    "name": "sidewalk_segment",
+    "category": "sidewalk",
+    "condition": "good",
+    "sidewalk_presence": "present",
+    "sidewalk_width_m": null,
+    "curb_ramp_status": "unclear",
+    "obstructions": [],
+    "hazards": [],
+    "crossing_features": [],
+    "description": "The video shows a concrete sidewalk running parallel to a street with visible traffic. The sidewalk appears to be in good condition with no visible obstructions or hazards. The width of the sidewalk is not clearly visible, so an estimate is not provided. Curb ramps are not clearly visible, so their status is unclear. There are no visible crossing features such as crosswalks or pedestrian signals.",
+    "lat": 40.0008210825,
+    "lon": -105.26444426,
+    "frame_ids": [
+      "530707851273816",
+      "457990398606287",
+      "275190250987467",
+      "488585415728698"
+    ],
+    "raw_response": "{\"name\": \"sidewalk_segment\", \"category\": \"sidewalk\", \"condition\": \"good\", \"sidewalk_presence\": \"present\", \"sidewalk_width_m\": null, \"curb_ramp_status\": \"unclear\", \"obstructions\": [], \"hazards\": [], \"crossing_features\": [], \"description\": \"The video shows a concrete sidewalk running parallel to a street with visible traffic. The sidewalk appears to be in good condition with no visible obstructions or hazards. The width of the sidewalk is not clearly visible, so an estimate is not provided. Curb ramps are not clearly visible, so their status is unclear. There are no visible crossing features such as crosswalks or pedestrian signals.\"}"
+  },
+  {
+    "sequence_id": "d__RxqJWJY6hTe_6hIAZ1A",
+    "clip_s3_uri": "s3://twelvelabs-bedrock-workshop-workshopbucket-f4zu1jcvakku/clips/d__RxqJWJY6hTe_6hIAZ1A.mp4",
+    "name": "sidewalk_segment",
+    "category": "sidewalk",
+    "condition": "good",
+    "sidewalk_presence": "present",
+    "sidewalk_width_m": null,
+    "curb_ramp_status": "unclear",
+    "obstructions": [],
+    "hazards": [],
+    "crossing_features": [],
+    "description": "The video shows a concrete sidewalk with a smooth surface, surrounded by grass and trees. The sidewalk appears to be in good condition, with no visible obstructions or hazards. The presence of curb ramps is unclear due to the angle and distance of the camera. There are no visible crossing features such as crosswalks or pedestrian signals.",
+    "lat": 40.010980285,
+    "lon": -105.252776045,
+    "frame_ids": [
+      "133137272165005",
+      "1230455917409182",
+      "295349165390266",
+      "567246584243342"
+    ],
+    "raw_response": "{\"name\": \"sidewalk_segment\", \"category\": \"sidewalk\", \"condition\": \"good\", \"sidewalk_presence\": \"present\", \"sidewalk_width_m\": null, \"curb_ramp_status\": \"unclear\", \"obstructions\": [], \"hazards\": [], \"crossing_features\": [], \"description\": \"The video shows a concrete sidewalk with a smooth surface, surrounded by grass and trees. The sidewalk appears to be in good condition, with no visible obstructions or hazards. The presence of curb ramps is unclear due to the angle and distance of the camera. There are no visible crossing features such as crosswalks or pedestrian signals.\"}"
+  },
+  {
+    "sequence_id": "VFEmPHYPp6SZzz5uwPSuig",
+    "clip_s3_uri": "s3://twelvelabs-bedrock-workshop-workshopbucket-f4zu1jcvakku/clips/VFEmPHYPp6SZzz5uwPSuig.mp4",
+    "name": "sidewalk_segment",
+    "category": "sidewalk",
+    "condition": "good",
+    "sidewalk_presence": "present",
+    "sidewalk_width_m": null,
+    "curb_ramp_status": "unclear",
+    "obstructions": [],
+    "hazards": [],
+    "crossing_features": [],
+    "description": "The video shows a clear sidewalk with no visible obstructions or hazards. The condition appears to be good, and there are no visible curb ramps or crossing features. The width cannot be estimated from the video.",
+    "lat": 40.00597423875,
+    "lon": -105.26203965375001,
+    "frame_ids": [
+      "1389696511387366",
+      "572468087030549",
+      "2044081599087621",
+      "507639316926008",
+      "173247931243079",
+      "949138792507818",
+      "135565708587244",
+      "1374419422937629"
+    ],
+    "raw_response": "{\"name\": \"sidewalk_segment\", \"category\": \"sidewalk\", \"condition\": \"good\", \"sidewalk_presence\": \"present\", \"sidewalk_width_m\": null, \"curb_ramp_status\": \"unclear\", \"obstructions\": [], \"hazards\": [], \"crossing_features\": [], \"description\": \"The video shows a clear sidewalk with no visible obstructions or hazards. The condition appears to be good, and there are no visible curb ramps or crossing features. The width cannot be estimated from the video.\"}"
+  }
+]

@@ -1,7 +1,20 @@
 {
+  "sidewalk_present": {
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "tp": 5,
+    "fp": 0,
+    "fn": 0
+  },
   "rmse_m": null,
   "rmse_matched_count": 0,
-  "total_detections": 0,
+  "total_detections": 5,
   "discrepancy_count": 0,
-  "type_counts": {}
+  "fp_per_km2": 0.0,
+  "area_km2": 1.6527,
+  "detections_per_km2": 0.0,
+  "type_counts": {
+    "sidewalk_present": 5
+  }
 }

@@ -50,7 +50,7 @@ MAPILLARY_ACCESS_TOKEN = os.getenv("MAPILLARY_ACCESS_TOKEN", "")
 MAPILLARY_API_BASE = "https://graph.mapillary.com"
 
 FRAME_SAMPLE_INTERVAL = 5   # seconds between sampled frames
-CLIP_FRAME_DURATION_SEC = _env_float("CLIP_FRAME_DURATION_SEC", 0.15)
+CLIP_FRAME_DURATION_SEC = _env_float("CLIP_FRAME_DURATION_SEC", 1.0)
 CLIP_OUTPUT_FPS = int(os.getenv("CLIP_OUTPUT_FPS", "30"))
 POI_MATCH_RADIUS_M = 50     # meters for Overture proximity match
 UTM_CRS = "EPSG:32613"      # UTM zone 13N for Colorado
