@@ -81,8 +81,10 @@ def fetch_transportation(output_dir: str = DATA_RAW) -> gpd.GeoDataFrame:
             id,
             subtype,
             class,
+            subclass,
             names.primary           AS name,
-            road,
+            road_surface,
+            road_flags,
             geometry,
             bbox.xmin               AS lon_min,
             bbox.ymin               AS lat_min,
@@ -128,8 +130,18 @@ def _df_to_gdf(df: pd.DataFrame) -> gpd.GeoDataFrame:
         geoms = gpd.GeoSeries(geom_col.apply(shape), name="geometry", crs=WGS84_CRS)
     else:
         from shapely import wkb
+
+        def _coerce_wkb(value):
+            if isinstance(value, memoryview):
+                return bytes(value)
+            if isinstance(value, bytearray):
+                return bytes(value)
+            if isinstance(value, (list, tuple)):
+                return bytes(value)
+            return value
+
         geoms = gpd.GeoSeries(
-            geom_col.apply(lambda g: wkb.loads(bytes(g) if isinstance(g, memoryview) else g)),
+            geom_col.apply(lambda g: wkb.loads(_coerce_wkb(g))),
             name="geometry",
             crs=WGS84_CRS,
         )

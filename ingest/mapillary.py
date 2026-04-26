@@ -27,14 +27,19 @@ logger = logging.getLogger(__name__)
 IMAGES_ENDPOINT = f"{MAPILLARY_API_BASE}/images"
 IMAGE_DETAIL_ENDPOINT = f"{MAPILLARY_API_BASE}/{{image_id}}"
 
-# Fields to pull per frame
-FRAME_FIELDS = "id,geometry,captured_at,sequence_id,compass_angle,thumb_2048_url"
+# Fields to pull per frame. Prefer the original-width thumbnail when available,
+# and fall back to lower-resolution thumbnails if the API omits it.
+FRAME_FIELDS = "id,geometry,captured_at,sequence,compass_angle,thumb_original_url,thumb_2048_url,thumb_1024_url"
 
 # Max images per API page (Mapillary caps at 2000)
-PAGE_LIMIT = 2000
+PAGE_LIMIT = 200
 
 # Seconds between retry attempts on rate-limit (429)
 RETRY_WAIT = 5
+
+# Query the configured bbox in tiles to avoid oversized Mapillary requests.
+TILE_GRID_SIZE = 8
+MAX_TILE_SUBDIVISION_DEPTH = 3
 
 
 def _auth_params() -> dict:
@@ -54,37 +59,68 @@ def fetch_sequences(
     os.makedirs(output_dir, exist_ok=True)
     out_path = os.path.join(output_dir, "mapillary_sequences.json")
 
-    bbox_str = (
-        f"{BBOX['min_lon']},{BBOX['min_lat']},{BBOX['max_lon']},{BBOX['max_lat']}"
-    )
-
-    params: dict[str, Any] = {
-        "bbox": bbox_str,
-        "fields": FRAME_FIELDS,
-        "limit": PAGE_LIMIT,
-        **_auth_params(),
-    }
-
     all_frames: list[dict] = []
+    seen_frame_ids: set[str] = set()
     page = 0
 
-    logger.info("Fetching Mapillary images for SF bbox…")
-    while True:
-        resp = _get_with_retry(IMAGES_ENDPOINT, params)
-        data = resp.get("data", [])
-        all_frames.extend(data)
-        page += 1
-        logger.info("Page %d: %d frames (total so far: %d)", page, len(data), len(all_frames))
+    logger.info("Fetching Mapillary images for SF bbox in %dx%d tiles…", TILE_GRID_SIZE, TILE_GRID_SIZE)
+    tile_queue: list[tuple[dict[str, float], int]] = [
+        (tile_bbox, 0) for tile_bbox in _iter_bbox_tiles(BBOX, TILE_GRID_SIZE)
+    ]
+    while tile_queue:
+        tile_bbox, depth = tile_queue.pop(0)
+        params: dict[str, Any] = {
+            "bbox": _bbox_to_string(tile_bbox),
+            "fields": FRAME_FIELDS,
+            "limit": PAGE_LIMIT,
+            **_auth_params(),
+        }
+
+        try:
+            while True:
+                resp = _get_with_retry(IMAGES_ENDPOINT, params)
+                data = resp.get("data", [])
+                page += 1
+
+                new_frames = 0
+                for frame in data:
+                    frame_id = frame.get("id")
+                    if not frame_id or frame_id in seen_frame_ids:
+                        continue
+                    seen_frame_ids.add(frame_id)
+                    all_frames.append(frame)
+                    new_frames += 1
+
+                logger.info(
+                    "Page %d: %d frames (%d new, total so far: %d)",
+                    page,
+                    len(data),
+                    new_frames,
+                    len(all_frames),
+                )
+
+                if max_images and len(all_frames) >= max_images:
+                    all_frames = all_frames[:max_images]
+                    break
+
+                # Mapillary pagination: next cursor in paging.next
+                next_cursor = resp.get("paging", {}).get("next")
+                if not next_cursor:
+                    break
+                params["after"] = next_cursor
+        except RuntimeError:
+            if depth >= MAX_TILE_SUBDIVISION_DEPTH:
+                raise
+            logger.warning(
+                "Tile query failed, subdividing bbox %s at depth %d",
+                _bbox_to_string(tile_bbox),
+                depth + 1,
+            )
+            tile_queue = [(child_bbox, depth + 1) for child_bbox in _iter_bbox_tiles(tile_bbox, 2)] + tile_queue
+            continue
 
         if max_images and len(all_frames) >= max_images:
-            all_frames = all_frames[:max_images]
             break
-
-        # Mapillary pagination: next cursor in paging.next
-        next_cursor = resp.get("paging", {}).get("next")
-        if not next_cursor:
-            break
-        params["after"] = next_cursor
 
     sequences = _group_by_sequence(all_frames)
     logger.info("Grouped into %d sequences", len(sequences))
@@ -100,6 +136,7 @@ def download_frames(
     sequences: list[dict],
     output_dir: str = DATA_RAW,
     sample_every_n: int = 1,
+    overwrite_existing: bool = False,
 ) -> None:
     """
     Download frame images for each sequence into data/raw/images/{sequence_id}/.
@@ -121,19 +158,19 @@ def download_frames(
         for frame in sampled:
             frame_id = frame["id"]
             out_path = os.path.join(seq_dir, f"{frame_id}.jpg")
-            if os.path.exists(out_path):
+            if os.path.exists(out_path) and not overwrite_existing:
                 continue
 
-            thumb_url = frame.get("thumb_2048_url")
-            if not thumb_url:
-                thumb_url = _fetch_thumb_url(frame_id)
-                frame["thumb_2048_url"] = thumb_url
+            image_url = _preferred_image_url(frame)
+            if not image_url:
+                image_url = _fetch_image_url(frame_id)
+                frame["thumb_original_url"] = image_url or frame.get("thumb_original_url", "")
 
-            if not thumb_url:
-                logger.warning("No thumb URL for frame %s — skipping", frame_id)
+            if not image_url:
+                logger.warning("No downloadable image URL for frame %s — skipping", frame_id)
                 continue
 
-            _download_file(thumb_url, out_path)
+            _download_file(image_url, out_path)
 
 
 def load_sequences(data_dir: str = DATA_RAW) -> list[dict]:
@@ -147,7 +184,7 @@ def _group_by_sequence(frames: list[dict]) -> list[dict]:
     """Group flat frame list into per-sequence dicts with ordered frame lists."""
     seq_map: dict[str, list[dict]] = {}
     for frame in frames:
-        seq_id = frame.get("sequence_id", "unknown")
+        seq_id = frame.get("sequence_id") or frame.get("sequence") or "unknown"
         seq_map.setdefault(seq_id, []).append(_parse_frame(frame))
 
     # Sort each sequence's frames by captured_at
@@ -170,20 +207,58 @@ def _parse_frame(raw: dict) -> dict:
         "lat": coords[1],
         "bearing": raw.get("compass_angle"),
         "timestamp": raw.get("captured_at", ""),
-        "sequence_id": raw.get("sequence_id", ""),
+        "sequence_id": raw.get("sequence_id") or raw.get("sequence", ""),
+        "thumb_original_url": raw.get("thumb_original_url", ""),
         "thumb_2048_url": raw.get("thumb_2048_url", ""),
+        "thumb_1024_url": raw.get("thumb_1024_url", ""),
     }
 
 
-def _fetch_thumb_url(image_id: str) -> str | None:
-    """Fetch thumb_2048_url for a single image ID (fallback if not in batch response)."""
+def _bbox_to_string(bbox: dict[str, float]) -> str:
+    return f"{bbox['min_lon']},{bbox['min_lat']},{bbox['max_lon']},{bbox['max_lat']}"
+
+
+def _iter_bbox_tiles(bbox: dict[str, float], grid_size: int) -> list[dict[str, float]]:
+    lon_step = (bbox["max_lon"] - bbox["min_lon"]) / grid_size
+    lat_step = (bbox["max_lat"] - bbox["min_lat"]) / grid_size
+    tiles: list[dict[str, float]] = []
+
+    for lon_index in range(grid_size):
+        min_lon = bbox["min_lon"] + lon_index * lon_step
+        max_lon = bbox["max_lon"] if lon_index == grid_size - 1 else min_lon + lon_step
+        for lat_index in range(grid_size):
+            min_lat = bbox["min_lat"] + lat_index * lat_step
+            max_lat = bbox["max_lat"] if lat_index == grid_size - 1 else min_lat + lat_step
+            tiles.append(
+                {
+                    "min_lon": min_lon,
+                    "min_lat": min_lat,
+                    "max_lon": max_lon,
+                    "max_lat": max_lat,
+                }
+            )
+
+    return tiles
+
+
+def _preferred_image_url(frame: dict) -> str:
+    return (
+        frame.get("thumb_original_url")
+        or frame.get("thumb_2048_url")
+        or frame.get("thumb_1024_url")
+        or ""
+    )
+
+
+def _fetch_image_url(image_id: str) -> str | None:
+    """Fetch the best available downloadable image URL for a single image ID."""
     url = IMAGE_DETAIL_ENDPOINT.format(image_id=image_id)
-    params = {"fields": "thumb_2048_url", **_auth_params()}
+    params = {"fields": "thumb_original_url,thumb_2048_url,thumb_1024_url", **_auth_params()}
     try:
         resp = _get_with_retry(url, params)
-        return resp.get("thumb_2048_url")
+        return resp.get("thumb_original_url") or resp.get("thumb_2048_url") or resp.get("thumb_1024_url")
     except Exception as exc:
-        logger.warning("Could not fetch thumb URL for %s: %s", image_id, exc)
+        logger.warning("Could not fetch image URL for %s: %s", image_id, exc)
         return None
 
 

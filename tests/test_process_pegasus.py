@@ -12,6 +12,7 @@ from process.pegasus import (
     frames_to_clip,
     parse_description,
     process_sequence_clip,
+    process_all_sequences,
 )
 
 
@@ -55,7 +56,7 @@ def test_parse_preserves_raw():
 
 def _mock_stream_response(text: str) -> MagicMock:
     """Build a fake InvokeModelWithResponseStream response."""
-    chunk_bytes = json.dumps({"outputText": text}).encode()
+    chunk_bytes = json.dumps({"message": text}).encode()
     event = {"chunk": {"bytes": chunk_bytes}}
     mock_resp = MagicMock()
     mock_resp.__getitem__ = lambda self, key: iter([event]) if key == "body" else None
@@ -86,8 +87,8 @@ def test_describe_clip_sends_video_input_type():
     describe_clip("s3://bucket/clip.mp4", client=client)
     kwargs = client.invoke_model_with_response_stream.call_args[1]
     body = json.loads(kwargs["body"])
-    assert body["inputType"] == "VIDEO"
-    assert body["inputS3Uri"] == "s3://bucket/clip.mp4"
+    assert body["inputPrompt"]
+    assert body["mediaSource"]["s3Location"]["uri"] == "s3://bucket/clip.mp4"
 
 
 # ── frames_to_clip ────────────────────────────────────────────────────────────
@@ -153,3 +154,49 @@ def test_process_sequence_clip_full_pipeline(mock_clip, mock_upload):
     assert result["category"] == "cafe"
     assert result["condition"] == "open"
     assert result["lat"] == pytest.approx((37.77 + 37.78) / 2)
+
+
+@patch("process.pegasus.process_sequence_clip")
+def test_process_all_sequences_baseline_duplicates_single_frame(mock_process, tmp_path):
+    seq_dir = tmp_path / "seq1"
+    seq_dir.mkdir()
+    frame_path = seq_dir / "f1.jpg"
+    frame_path.write_bytes(b"jpg")
+
+    mock_process.return_value = {
+        "sequence_id": "seq1",
+        "name": "Cafe",
+        "category": "cafe",
+        "condition": "open",
+        "lat": 37.77,
+        "lon": -122.42,
+        "frame_ids": ["f1", "f1"],
+        "raw_response": "{}",
+        "clip_s3_uri": "s3://bucket/baseline.mp4",
+    }
+
+    sequences = [
+        {
+            "sequence_id": "seq1",
+            "frames": [{"id": "f1", "lat": 37.77, "lon": -122.42, "timestamp": "2024-01-01T00:00:00Z"}],
+        }
+    ]
+
+    result = process_all_sequences(
+        sequences=sequences,
+        images_dir=str(tmp_path),
+        output_dir=str(tmp_path),
+        max_frames_per_clip=1,
+        min_frames_per_clip=1,
+        duplicate_single_frame=True,
+        output_filename="baseline_descriptions.json",
+        s3_prefix="baseline-clips/",
+        client=MagicMock(),
+    )
+
+    assert len(result) == 1
+    args = mock_process.call_args[0]
+    assert args[0] == "seq1"
+    assert args[1] == [str(frame_path), str(frame_path)]
+    assert args[2][0]["id"] == "f1"
+    assert args[2][1]["id"] == "f1"

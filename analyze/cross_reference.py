@@ -49,6 +49,14 @@ def load_descriptions(data_dir: str = DATA_PROCESSED) -> list[dict]:
         return json.load(f)
 
 
+def _empty_detections_gdf() -> gpd.GeoDataFrame:
+    return gpd.GeoDataFrame(
+        {column: pd.Series(dtype="object") for column in _output_columns()},
+        geometry=gpd.GeoSeries([], crs=WGS84_CRS),
+        crs=WGS84_CRS,
+    )
+
+
 def descriptions_to_gdf(descriptions: list[dict]) -> gpd.GeoDataFrame:
     """Convert Pegasus description dicts to a GeoDataFrame (WGS84)."""
     rows = []
@@ -137,7 +145,7 @@ def cross_reference(
     obs_gdf = descriptions_to_gdf(descriptions)
     if obs_gdf.empty:
         logger.warning("No observations with valid coordinates")
-        return gpd.GeoDataFrame(geometry=gpd.GeoSeries([], crs=WGS84_CRS))
+        return _empty_detections_gdf()
 
     # Project to UTM for metre-accurate proximity matching
     obs_utm = obs_gdf.to_crs(UTM_CRS)

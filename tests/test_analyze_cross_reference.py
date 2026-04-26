@@ -147,3 +147,4 @@ def test_cross_reference_empty_descriptions():
     gdf = cross_reference([], _make_overture())
     assert isinstance(gdf, gpd.GeoDataFrame)
     assert len(gdf) == 0
+    assert "detection_type" in gdf.columns

@@ -11,14 +11,32 @@ BBOX = {
 }
 
 AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+AWS_ACCOUNT_ID = os.getenv("AWS_ACCOUNT_ID", "")
 S3_WORKSHOP_BUCKET = "twelvelabs-bedrock-workshop-workshopbucket-f4zu1jcvakku"
 S3_VECTOR_BUCKET = "twelvelabs-aws-vectorbucket-tkjkgf05ulh8"
 OPENSEARCH_ENDPOINT = "https://ee6qftmunca9x55uvgj5.us-east-1.aoss.amazonaws.com"
 OPENSEARCH_INDEX = "geostl-embeddings"
 
-# Verify these from workshop notebook if calls fail
-MARENGO_MODEL_ID = "twelvelabs.marengo-embed-2-7-v1:0"
-PEGASUS_MODEL_ID = "twelvelabs.pegasus-1-2-v1:0"
+def _default_twelvelabs_model_id(model: str, region: str) -> str:
+    """Return the Bedrock inference profile ID for the active AWS region."""
+    region_prefix = region.split("-", 1)[0]
+    if model == "marengo":
+        return f"{region_prefix}.twelvelabs.marengo-embed-2-7-v1:0"
+    if model == "pegasus":
+        return f"{region_prefix}.twelvelabs.pegasus-1-2-v1:0"
+    raise ValueError(f"Unsupported TwelveLabs model: {model}")
+
+
+# Allow explicit env overrides, but default to the Bedrock inference profiles
+# required for the current AWS region.
+MARENGO_MODEL_ID = os.getenv(
+    "MARENGO_MODEL_ID",
+    _default_twelvelabs_model_id("marengo", AWS_REGION),
+)
+PEGASUS_MODEL_ID = os.getenv(
+    "PEGASUS_MODEL_ID",
+    _default_twelvelabs_model_id("pegasus", AWS_REGION),
+)
 
 MAPILLARY_ACCESS_TOKEN = os.getenv("MAPILLARY_ACCESS_TOKEN", "")
 MAPILLARY_API_BASE = "https://graph.mapillary.com"
@@ -29,7 +47,7 @@ UTM_CRS = "EPSG:32610"      # UTM zone 10N for San Francisco
 WGS84_CRS = "EPSG:4326"
 
 OVERTURE_RELEASE = "2026-04-15.0"
-OVERTURE_S3_BASE = f"s3://overturemaps-us-east-1/release/{OVERTURE_RELEASE}"
+OVERTURE_S3_BASE = f"s3://overturemaps-us-west-2/release/{OVERTURE_RELEASE}"
 
 DATA_RAW = "data/raw"
 DATA_PROCESSED = "data/processed"

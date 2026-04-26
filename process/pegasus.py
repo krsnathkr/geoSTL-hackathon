@@ -18,8 +18,6 @@ import subprocess
 import tempfile
 from typing import Optional
 
-import boto3
-
 from config.settings import (
     AWS_REGION,
     DATA_PROCESSED,
@@ -27,7 +25,7 @@ from config.settings import (
     PEGASUS_MODEL_ID,
     S3_WORKSHOP_BUCKET,
 )
-from process.twelvelabs import get_bedrock_client, upload_to_s3
+from process.twelvelabs import get_bedrock_client, upload_to_s3, _s3_location
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +44,7 @@ def frames_to_clip(
     frame_paths: list[str],
     fps: int = 5,
     output_path: Optional[str] = None,
+    target_duration_sec: float = 10.0,
 ) -> str:
     """
     Stitch a list of JPEG frame paths into an MP4 clip using ffmpeg.
@@ -63,9 +62,10 @@ def frames_to_clip(
 
     # Write frame paths to a concat file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as concat_file:
+        frame_duration = target_duration_sec / len(frame_paths)
         for path in frame_paths:
             concat_file.write(f"file '{os.path.abspath(path)}'\n")
-            concat_file.write(f"duration {1/fps:.4f}\n")
+            concat_file.write(f"duration {frame_duration:.4f}\n")
         concat_path = concat_file.name
 
     cmd = [
@@ -101,9 +101,12 @@ def describe_clip(
         client = get_bedrock_client()
 
     body = json.dumps({
-        "inputType": "VIDEO",
-        "inputS3Uri": s3_uri,
-        "prompt": prompt,
+        "inputPrompt": prompt,
+        "mediaSource": {
+            "s3Location": _s3_location(s3_uri),
+        },
+        "temperature": 0.2,
+        "maxOutputTokens": 512,
     })
 
     response = client.invoke_model_with_response_stream(
@@ -117,13 +120,21 @@ def describe_clip(
     for event in response["body"]:
         chunk = event.get("chunk")
         if chunk:
-            data = json.loads(chunk["bytes"].decode("utf-8"))
-            text_piece = (
-                data.get("outputText")
-                or data.get("text")
-                or data.get("completion")
-                or ""
-            )
+            raw = chunk["bytes"].decode("utf-8")
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                chunks.append(raw)
+                continue
+
+            text_piece = data.get("message")
+            if text_piece is None:
+                text_piece = (
+                    data.get("outputText")
+                    or data.get("text")
+                    or data.get("completion")
+                    or ""
+                )
             chunks.append(text_piece)
 
     return "".join(chunks).strip()
@@ -212,6 +223,10 @@ def process_all_sequences(
     images_dir: str,
     output_dir: str = DATA_PROCESSED,
     max_frames_per_clip: int = 10,
+    min_frames_per_clip: int = 2,
+    duplicate_single_frame: bool = False,
+    output_filename: str = "descriptions.json",
+    s3_prefix: str = "clips/",
     client=None,
 ) -> list[dict]:
     """
@@ -238,8 +253,15 @@ def process_all_sequences(
             if os.path.exists(path):
                 sampled.append((path, frame))
 
-        if len(sampled) < 2:
-            logger.warning("Sequence %s: fewer than 2 downloaded frames — skipping", seq_id)
+        if duplicate_single_frame and len(sampled) == 1:
+            sampled = [sampled[0], sampled[0]]
+
+        if len(sampled) < min_frames_per_clip:
+            logger.warning(
+                "Sequence %s: fewer than %d downloaded frames — skipping",
+                seq_id,
+                min_frames_per_clip,
+            )
             continue
 
         paths, metas = zip(*sampled)
@@ -248,6 +270,7 @@ def process_all_sequences(
                 seq_id,
                 list(paths),
                 list(metas),
+                s3_prefix=s3_prefix,
                 client=client,
             )
             all_results.append(result)
@@ -258,7 +281,7 @@ def process_all_sequences(
         except Exception as exc:
             logger.error("Failed to process sequence %s: %s", seq_id, exc)
 
-    out_path = os.path.join(output_dir, "descriptions.json")
+    out_path = os.path.join(output_dir, output_filename)
     with open(out_path, "w") as f:
         json.dump(all_results, f, indent=2)
     logger.info("Saved descriptions → %s (%d sequences)", out_path, len(all_results))

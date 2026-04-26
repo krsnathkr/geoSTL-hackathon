@@ -152,3 +152,11 @@ def test_load_detections_roundtrip():
         loaded = load_detections(data_dir=tmp)
         assert isinstance(loaded, gpd.GeoDataFrame)
         assert len(loaded) == 3
+
+
+def test_export_all_handles_empty_detection_frame():
+    empty = gpd.GeoDataFrame(geometry=gpd.GeoSeries([], crs=WGS84_CRS), crs=WGS84_CRS)
+    with tempfile.TemporaryDirectory() as tmp:
+        paths = export_all(empty, output_dir=tmp)
+        assert os.path.exists(paths["geojson"])
+        assert os.path.exists(paths["geoparquet"])

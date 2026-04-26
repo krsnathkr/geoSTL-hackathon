@@ -37,6 +37,13 @@ REQUIRED_PROPERTIES = [
 ]
 
 
+def _ensure_required_columns(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    for col in REQUIRED_PROPERTIES:
+        if col not in gdf.columns:
+            gdf[col] = None
+    return gdf
+
+
 def to_geojson(
     detections: gpd.GeoDataFrame,
     output_dir: str = DATA_OUTPUT,
@@ -53,15 +60,11 @@ def to_geojson(
     out_path = os.path.join(output_dir, filename)
 
     gdf = detections.copy()
+    gdf = _ensure_required_columns(gdf)
     if exclude_validated:
         gdf = gdf[gdf["detection_type"] != "validated"]
 
     gdf = gdf.to_crs(WGS84_CRS)
-
-    # Ensure all required columns exist (fill missing with None)
-    for col in REQUIRED_PROPERTIES:
-        if col not in gdf.columns:
-            gdf[col] = None
 
     # Serialise frame_ids: stored as JSON string, keep as-is in GeoJSON
     feature_collection = {
@@ -108,6 +111,7 @@ def to_geoparquet(
     out_path = os.path.join(output_dir, filename)
 
     gdf = detections.copy()
+    gdf = _ensure_required_columns(gdf)
     if exclude_validated:
         gdf = gdf[gdf["detection_type"] != "validated"]
 

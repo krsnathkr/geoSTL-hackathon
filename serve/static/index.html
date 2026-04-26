@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GeoSTL Video Intelligence</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>GeoSTL Video Intelligence</h1>
+          <p>Commercial corridor freshness audit</p>
+        </div>
+        <div id="status-pill" class="status-pill">Loading</div>
+      </header>
+
+      <main class="layout">
+        <section class="map-panel">
+          <div id="map"></div>
+        </section>
+
+        <aside class="sidebar">
+          <section class="panel">
+            <h2>Filters</h2>
+            <label><input type="checkbox" value="stale" checked /> Stale</label>
+            <label><input type="checkbox" value="missing" checked /> Missing</label>
+            <label><input type="checkbox" value="miscategorized" checked /> Miscategorized</label>
+            <label><input type="checkbox" value="validated" /> Validated</label>
+          </section>
+
+          <section class="panel">
+            <h2>Detection Detail</h2>
+            <div id="detail-empty" class="empty-state">Select a detection on the map.</div>
+            <dl id="detail-card" class="detail-card hidden">
+              <div><dt>Name</dt><dd id="detail-name"></dd></div>
+              <div><dt>Type</dt><dd id="detail-type"></dd></div>
+              <div><dt>Condition</dt><dd id="detail-condition"></dd></div>
+              <div><dt>Confidence</dt><dd id="detail-confidence"></dd></div>
+              <div><dt>GERS</dt><dd id="detail-gers"></dd></div>
+              <div><dt>Overture</dt><dd id="detail-overture"></dd></div>
+              <div><dt>Clip</dt><dd id="detail-clip"></dd></div>
+            </dl>
+          </section>
+
+          <section class="panel">
+            <h2>Metrics</h2>
+            <div id="metrics-summary" class="metrics-summary"></div>
+            <div id="counts-chart" class="chart"></div>
+            <div id="quality-chart" class="chart"></div>
+          </section>
+
+          <section class="panel">
+            <h2>Temporal Comparison</h2>
+            <div id="comparison-summary" class="metrics-summary"></div>
+            <div id="comparison-chart" class="chart"></div>
+            <div id="comparison-table" class="comparison-table"></div>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

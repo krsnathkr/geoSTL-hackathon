@@ -44,8 +44,8 @@ def test_embed_image_input_type():
     client.invoke_model.return_value = _mock_bedrock_response(_fake_embedding())
     embed_image("s3://bucket/frame.jpg", client=client)
     body = json.loads(client.invoke_model.call_args[1]["body"])
-    assert body["inputType"] == "IMAGE"
-    assert body["inputS3Uri"] == "s3://bucket/frame.jpg"
+    assert body["inputType"] == "image"
+    assert body["mediaSource"]["s3Location"]["uri"] == "s3://bucket/frame.jpg"
 
 
 def test_embed_text():
@@ -54,7 +54,7 @@ def test_embed_text():
     result = embed_text("blue bottle coffee shop", client=client)
     assert len(result) == EMBEDDING_DIM
     body = json.loads(client.invoke_model.call_args[1]["body"])
-    assert body["inputType"] == "TEXT"
+    assert body["inputType"] == "text"
 
 
 def test_embed_image_missing_embedding_raises():

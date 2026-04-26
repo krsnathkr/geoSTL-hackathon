@@ -6,14 +6,13 @@ Marengo accepts IMAGE, VIDEO, TEXT, or AUDIO input → returns float[1024] embed
 
 import json
 import logging
-import os
 import time
-from typing import Optional
 
 import boto3
 
 from config.settings import (
     AWS_REGION,
+    AWS_ACCOUNT_ID,
     MARENGO_MODEL_ID,
     S3_WORKSHOP_BUCKET,
 )
@@ -22,6 +21,29 @@ logger = logging.getLogger(__name__)
 
 # Marengo embedding dimension
 EMBEDDING_DIM = 1024
+
+
+def _s3_location(uri: str) -> dict:
+    location = {"uri": uri}
+    if AWS_ACCOUNT_ID:
+        location["bucketOwner"] = AWS_ACCOUNT_ID
+    return location
+
+
+def _extract_embedding(result: dict) -> list[float] | None:
+    if "embedding" in result:
+        return result.get("embedding")
+    if "embeddings" in result:
+        return result.get("embeddings")
+
+    data = result.get("data")
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict):
+                embedding = item.get("embedding") or item.get("embeddings")
+                if embedding is not None:
+                    return embedding
+    return None
 
 
 def get_bedrock_client():
@@ -50,7 +72,12 @@ def embed_image(s3_uri: str, client=None) -> list[float]:
     if client is None:
         client = get_bedrock_client()
 
-    body = json.dumps({"inputType": "IMAGE", "inputS3Uri": s3_uri})
+    body = json.dumps({
+        "inputType": "image",
+        "mediaSource": {
+            "s3Location": _s3_location(s3_uri),
+        },
+    })
     response = client.invoke_model(
         modelId=MARENGO_MODEL_ID,
         body=body,
@@ -58,7 +85,7 @@ def embed_image(s3_uri: str, client=None) -> list[float]:
         accept="application/json",
     )
     result = json.loads(response["body"].read())
-    embedding = result.get("embedding") or result.get("embeddings")
+    embedding = _extract_embedding(result)
     if embedding is None:
         raise ValueError(f"No embedding in Marengo response: {list(result.keys())}")
     return embedding
@@ -69,7 +96,12 @@ def embed_video(s3_uri: str, client=None) -> list[float]:
     if client is None:
         client = get_bedrock_client()
 
-    body = json.dumps({"inputType": "VIDEO", "inputS3Uri": s3_uri})
+    body = json.dumps({
+        "inputType": "VIDEO",
+        "mediaSource": {
+            "s3Location": _s3_location(s3_uri),
+        },
+    })
     response = client.invoke_model(
         modelId=MARENGO_MODEL_ID,
         body=body,
@@ -77,7 +109,7 @@ def embed_video(s3_uri: str, client=None) -> list[float]:
         accept="application/json",
     )
     result = json.loads(response["body"].read())
-    embedding = result.get("embedding") or result.get("embeddings")
+    embedding = _extract_embedding(result)
     if embedding is None:
         raise ValueError(f"No embedding in Marengo response: {list(result.keys())}")
     return embedding
@@ -88,7 +120,7 @@ def embed_text(text: str, client=None) -> list[float]:
     if client is None:
         client = get_bedrock_client()
 
-    body = json.dumps({"inputType": "TEXT", "inputText": text})
+    body = json.dumps({"inputType": "text", "inputText": text})
     response = client.invoke_model(
         modelId=MARENGO_MODEL_ID,
         body=body,
@@ -96,7 +128,7 @@ def embed_text(text: str, client=None) -> list[float]:
         accept="application/json",
     )
     result = json.loads(response["body"].read())
-    embedding = result.get("embedding") or result.get("embeddings")
+    embedding = _extract_embedding(result)
     if embedding is None:
         raise ValueError(f"No embedding in Marengo response: {list(result.keys())}")
     return embedding
