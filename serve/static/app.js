@@ -1,6 +1,5 @@
 const palette = {
   sidewalk_present: "#2f855a",
-  sidewalk_missing: "#d94841",
   sidewalk_unclear: "#718096",
   curb_ramp_missing: "#ff8f00",
   obstruction: "#c05621",

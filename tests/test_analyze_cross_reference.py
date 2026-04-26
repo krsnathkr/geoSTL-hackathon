@@ -102,9 +102,7 @@ def test_cross_reference_creates_inventory_findings():
 
 def test_cross_reference_without_transport():
     gdf = cross_reference([_make_desc(sidewalk_presence="absent")], None)
-    assert len(gdf) == 1
-    assert gdf.iloc[0]["detection_type"] == "sidewalk_missing"
-    assert gdf.iloc[0]["transport_id"] == ""
+    assert len(gdf) == 0  # sidewalk_missing suppressed — highways produce false positives
 
 
 def test_cross_reference_empty_descriptions():

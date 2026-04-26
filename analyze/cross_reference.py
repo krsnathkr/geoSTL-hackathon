@@ -156,10 +156,8 @@ def classify_observation(row: pd.Series) -> list[str]:
     surface_defects = [_normalize_label(v) for v in row.get("surface_defects") or []]
     crossing_features = [_normalize_label(v) for v in row.get("crossing_features") or []]
 
-    # Sidewalk presence — skip "unclear" to avoid flooding the map with low-signal points
-    if presence == "absent":
-        findings.append("sidewalk_missing")
-    elif presence == "present":
+    # Sidewalk presence — "absent" skipped (highways produce false positives)
+    if presence == "present":
         findings.append("sidewalk_present")
     # presence == "unclear" → no finding emitted
 

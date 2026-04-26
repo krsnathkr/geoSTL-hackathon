@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a 24-hour hackathon project for the **GeoSTL + TwelveLabs Geospatial Video Intelligence Hackathon** (April 25–26, 2026). The challenge uses TwelveLabs video AI models (via AWS Bedrock) to automate geospatial map validation against [Overture Maps Foundation](https://overturemaps.org/) data.
 
 **Platform:** TwelveLabs via AWS Bedrock  
-**Models:** Marengo 3.0 (multimodal embeddings + semantic search), Pegasus 1.2 (video-to-text generation)  
+**Models:** Pegasus 1.2 (video-to-text generation) — Marengo was intentionally not used; see design decision below.  
 **Licenses:** Apache 2.0 (code), CDLA 2.0 (data outputs)
 
 ## Challenge Track
@@ -20,18 +20,18 @@ This is a 24-hour hackathon project for the **GeoSTL + TwelveLabs Geospatial Vid
 
 ## TwelveLabs Integration Pattern
 
-**Marengo 3.0** (semantic search):
-1. Upload video to TwelveLabs via Bedrock → index with Marengo → search by natural-language query → extract timestamps → map timestamps to GPS/metadata
-
 **Pegasus 1.2** (structured descriptions):
 1. Extract 5–10s clip of detected feature → send to Pegasus → parse response into structured attributes → attach to geospatial feature output
+
+**Why Marengo is not used:**
+Mapillary sequences are very short — 10–12 seconds at most. Marengo's semantic search and temporal indexing add value on long continuous footage where you need to find relevant moments across many minutes of video. For clips this short, Marengo provides no meaningful advantage. Skipping it also removes a full indexing round-trip, which meaningfully improves pipeline throughput. The decision was made deliberately — not because of any technical limitation.
 
 ## Key Technical Constraints
 
 - **CRS:** All outputs in EPSG:4326 (WGS84). Use UTM projections for internal distance calculations.
 - **GERS matching:** Match Overture features by proximity (< 50m for POIs, IoU > 0.3 for buildings) + fuzzy name matching. Always tag GERS IDs in output or detections can't contribute to the open data ecosystem.
 - **Georeferencing:** Use natively georeferenced data (Mapillary, OpenAerialMap) to avoid hours lost on manual georeferencing. All outputs must include GPS coordinates.
-- **Video sampling:** 30fps × 30min = 54,000 frames — use keyframe/scene-change extraction or fixed-interval sampling (1 frame per 2–5s). Use Marengo to search for relevant moments rather than processing all frames.
+- **Video sampling:** 30fps × 30min = 54,000 frames — use keyframe/scene-change extraction or fixed-interval sampling (1 frame per 2–5s). Pegasus processes the sampled clips directly; no separate indexing step is needed.
 - **Quantitative evaluation required:** Precision, recall, F1 per feature type; geospatial RMSE. Judges require metrics, not just demos.
 - **Temporal advantage:** Must demonstrate measurable accuracy gain from video sequences vs. single-frame still-image baselines.
 

@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+MY NOTES.md
+docs/
+
 # C extensions
 *.so
 
@@ -186,3 +189,8 @@ data/raw/*.parquet
 data/raw/mapillary_sequences.json
 data/processed/
 data/output/
+
+# Data archives (upload to Google Drive separately)
+geoSTL-data-artifacts.zip
+geoSTL-data-images.zip
+ziG44vB8

@@ -39,7 +39,7 @@ def _make_detections():
         },
         {
             "obs_id": "seq-2",
-            "detection_type": "sidewalk_missing",
+            "detection_type": "obstruction",
             "confidence": 0.68,
             "obs_name": "sidewalk_segment",
             "obs_category": "sidewalk",

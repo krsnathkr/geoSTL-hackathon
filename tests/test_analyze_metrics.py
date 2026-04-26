@@ -67,13 +67,11 @@ def test_geodesic_distance_known():
 def test_detection_metrics_type_breakdown():
     rows = [
         {"obs_id": "a", "detection_type": "pothole", "confidence": 0.8, "match_distance_m": 10.0, "lat": 37.77, "lon": -122.42},
-        {"obs_id": "b", "detection_type": "sidewalk_missing", "confidence": 0.7, "match_distance_m": None, "lat": 37.78, "lon": -122.43},
-        {"obs_id": "c", "detection_type": "sidewalk_present", "confidence": 0.9, "match_distance_m": 5.0, "lat": 37.79, "lon": -122.44},
+        {"obs_id": "b", "detection_type": "sidewalk_present", "confidence": 0.9, "match_distance_m": 5.0, "lat": 37.79, "lon": -122.44},
     ]
     gdf = _make_detections(rows)
     metrics = compute_detection_metrics(gdf)
     assert "pothole" in metrics
-    assert "sidewalk_missing" in metrics
     assert "sidewalk_present" in metrics
     assert "rmse_m" in metrics
 
@@ -113,7 +111,7 @@ def test_temporal_advantage():
 def test_compute_and_save_writes_json():
     rows = [
         {"obs_id": "a", "detection_type": "construction", "confidence": 0.8, "match_distance_m": 10.0, "lat": 37.77, "lon": -122.42},
-        {"obs_id": "b", "detection_type": "sidewalk_missing", "confidence": 0.6, "match_distance_m": None, "lat": 37.78, "lon": -122.43},
+        {"obs_id": "b", "detection_type": "obstruction", "confidence": 0.6, "match_distance_m": None, "lat": 37.78, "lon": -122.43},
     ]
     gdf = _make_detections(rows)
 
