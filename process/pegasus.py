@@ -30,13 +30,14 @@ from process.twelvelabs import get_bedrock_client, upload_to_s3, _s3_location
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROMPT = (
-    "Look at this street-level video. "
-    "Identify any business or point of interest visible. "
-    "Return a JSON object with keys: name (business name as shown on signage), "
-    "category (one of: restaurant, cafe, retail, office, hotel, bar, service, other), "
-    "condition (one of: open, closed, vacant, under_construction, unknown). "
-    "If multiple businesses are visible, return the most prominent one. "
-    "Respond ONLY with the JSON object, no explanation."
+    "You are analyzing a street-level video sequence for a geospatial audit. "
+    "Examine the video carefully and return a JSON object with exactly these keys:\n"
+    '{"name": "<name from signage, or descriptive label if no signage: e.g. \'residential street\', \'park trail\', \'university building\'>", '
+    '"category": "<one of: restaurant, cafe, retail, office, hotel, bar, service, residential, park, university, parking, transit, trail, other>", '
+    '"condition": "<one of: open, closed, vacant, under_construction, good, fair, poor, unknown>", '
+    '"description": "<2-3 sentences: describe the buildings, signs, activity, infrastructure, and surroundings visible in the video>"}\n'
+    "Extract the most prominent feature. If no business is visible, describe the area type (park, residential, campus, commercial corridor, etc). "
+    "Respond ONLY with valid JSON, no other text."
 )
 
 
@@ -155,6 +156,7 @@ def parse_description(raw_text: str) -> dict:
             "name": data.get("name", ""),
             "category": data.get("category", "other"),
             "condition": data.get("condition", "unknown"),
+            "description": data.get("description", ""),
             "raw": raw_text,
         }
     except (json.JSONDecodeError, ValueError):
@@ -164,11 +166,13 @@ def parse_description(raw_text: str) -> dict:
     name_m = re.search(r'"?name"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
     cat_m = re.search(r'"?category"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
     cond_m = re.search(r'"?condition"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
+    desc_m = re.search(r'"?description"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
 
     return {
         "name": name_m.group(1) if name_m else "",
         "category": cat_m.group(1) if cat_m else "other",
         "condition": cond_m.group(1) if cond_m else "unknown",
+        "description": desc_m.group(1) if desc_m else "",
         "raw": raw_text,
     }
 
@@ -208,6 +212,7 @@ def process_sequence_clip(
             "name": parsed["name"],
             "category": parsed["category"],
             "condition": parsed["condition"],
+            "description": parsed.get("description", ""),
             "lat": centroid_lat,
             "lon": centroid_lon,
             "frame_ids": [f["id"] for f in frame_meta],

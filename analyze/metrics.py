@@ -161,6 +161,17 @@ def compute_temporal_advantage(
 
 # ── Full metrics pipeline ─────────────────────────────────────────────────────
 
+def _sanitize_nans(obj):
+    """Recursively replace float NaN with None so json.dump writes valid JSON."""
+    if isinstance(obj, float) and math.isnan(obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_nans(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_nans(v) for v in obj]
+    return obj
+
+
 def compute_and_save(
     detections: gpd.GeoDataFrame,
     baseline_detections: Optional[gpd.GeoDataFrame] = None,
@@ -199,7 +210,7 @@ def compute_and_save(
 
     out_path = os.path.join(output_dir, "metrics.json")
     with open(out_path, "w") as f:
-        json.dump(metrics, f, indent=2)
+        json.dump(_sanitize_nans(metrics), f, indent=2)
     logger.info("Saved metrics → %s", out_path)
 
     return metrics

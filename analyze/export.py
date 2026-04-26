@@ -26,6 +26,7 @@ REQUIRED_PROPERTIES = [
     "obs_name",
     "obs_category",
     "obs_condition",
+    "obs_description",
     "gers_id",
     "overture_name",
     "overture_category",

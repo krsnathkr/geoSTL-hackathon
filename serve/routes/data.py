@@ -2,11 +2,31 @@ import json
 import os
 from typing import Any
 
-from fastapi import APIRouter
+import boto3
+from fastapi import APIRouter, HTTPException, Query
 
 
 def build_router(data_raw_dir: str, data_output_dir: str) -> APIRouter:
     router = APIRouter()
+
+    @router.get("/clip-url")
+    def get_clip_url(uri: str = Query(..., description="S3 URI of the clip")) -> dict[str, str]:
+        if not uri.startswith("s3://"):
+            raise HTTPException(status_code=400, detail="uri must be an s3:// URI")
+        without_prefix = uri[len("s3://"):]
+        bucket, _, key = without_prefix.partition("/")
+        if not key:
+            raise HTTPException(status_code=400, detail="Invalid S3 URI")
+        try:
+            s3 = boto3.client("s3")
+            url = s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": key},
+                ExpiresIn=3600,
+            )
+            return {"url": url}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     detections_path = os.path.join(data_output_dir, "detections.geojson")
     baseline_detections_path = os.path.join(data_output_dir, "baseline_detections.geojson")

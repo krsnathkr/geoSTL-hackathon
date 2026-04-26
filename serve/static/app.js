@@ -5,7 +5,7 @@ const palette = {
   validated: "#4b7f52",
 };
 
-const map = L.map("map", { zoomControl: true }).setView([37.7749, -122.4194], 13);
+const map = L.map("map", { zoomControl: true }).setView([40.005, -105.265], 14);
 const markersLayer = L.layerGroup().addTo(map);
 const sequencesLayer = L.layerGroup().addTo(map);
 
@@ -106,10 +106,29 @@ function showDetail(feature) {
   document.getElementById("detail-gers").textContent = feature.properties.gers_id || "No match";
   document.getElementById("detail-overture").textContent =
     feature.properties.overture_name || "No Overture feature";
+  document.getElementById("detail-description").textContent =
+    feature.properties.obs_description || "";
 
   const clipUri = feature.properties.clip_s3_uri || "";
   const clipNode = document.getElementById("detail-clip");
-  clipNode.textContent = clipUri || "No clip URI";
+  const videoNode = document.getElementById("detail-video");
+  clipNode.textContent = "";
+  videoNode.style.display = "none";
+  videoNode.src = "";
+
+  if (clipUri) {
+    fetch(`/api/clip-url?uri=${encodeURIComponent(clipUri)}`)
+      .then((r) => r.json())
+      .then(({ url }) => {
+        videoNode.src = url;
+        videoNode.style.display = "block";
+      })
+      .catch(() => {
+        clipNode.textContent = clipUri;
+      });
+  } else {
+    clipNode.textContent = "No clip";
+  }
 }
 
 function renderMetrics(metrics) {

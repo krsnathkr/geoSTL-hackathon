@@ -4,10 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BBOX = {
-    "min_lon": -122.52,
-    "min_lat": 37.70,
-    "max_lon": -122.35,
-    "max_lat": 37.81,
+    "min_lon": -105.285,
+    "min_lat": 39.990,
+    "max_lon": -105.245,
+    "max_lat": 40.020,
 }
 
 AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
@@ -43,7 +43,7 @@ MAPILLARY_API_BASE = "https://graph.mapillary.com"
 
 FRAME_SAMPLE_INTERVAL = 5   # seconds between sampled frames
 POI_MATCH_RADIUS_M = 50     # meters for Overture proximity match
-UTM_CRS = "EPSG:32610"      # UTM zone 10N for San Francisco
+UTM_CRS = "EPSG:32613"      # UTM zone 13N for Colorado
 WGS84_CRS = "EPSG:4326"
 
 OVERTURE_RELEASE = "2026-04-15.0"

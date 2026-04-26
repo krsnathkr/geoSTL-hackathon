@@ -68,6 +68,7 @@ def descriptions_to_gdf(descriptions: list[dict]) -> gpd.GeoDataFrame:
             "name": d.get("name", ""),
             "category": d.get("category", "other"),
             "condition": d.get("condition", "unknown"),
+            "description": d.get("description", ""),
             "clip_s3_uri": d.get("clip_s3_uri", ""),
             "frame_ids": json.dumps(d.get("frame_ids", [])),
             "lat": d["lat"],
@@ -159,6 +160,15 @@ def cross_reference(
         distance_col="distance_m",
         rsuffix="ov",
     )
+    # sjoin_nearest renames conflicting obs columns; normalise back to plain names
+    rename = {}
+    for suffix in ("_left", "_"):
+        if f"name{suffix}" in joined.columns:
+            rename[f"name{suffix}"] = "name"
+        if f"category{suffix}" in joined.columns:
+            rename[f"category{suffix}"] = "category"
+    if rename:
+        joined = joined.rename(columns=rename)
 
     rows = []
     for _, row in joined.iterrows():
@@ -187,6 +197,7 @@ def cross_reference(
             "obs_name": row.get("name", ""),
             "obs_category": row.get("category", ""),
             "obs_condition": row.get("condition", "unknown"),
+            "obs_description": row.get("description", ""),
             "gers_id": gers,
             "overture_name": ov_name if isinstance(ov_name, str) else "",
             "overture_category": ov_cat if isinstance(ov_cat, str) else "",
@@ -210,6 +221,6 @@ def cross_reference(
 def _output_columns() -> list[str]:
     return [
         "obs_id", "detection_type", "confidence", "obs_name", "obs_category",
-        "obs_condition", "gers_id", "overture_name", "overture_category",
+        "obs_condition", "obs_description", "gers_id", "overture_name", "overture_category",
         "distance_m", "clip_s3_uri", "frame_ids", "lat", "lon",
     ]

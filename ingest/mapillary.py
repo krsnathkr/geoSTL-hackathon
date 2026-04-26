@@ -63,7 +63,7 @@ def fetch_sequences(
     seen_frame_ids: set[str] = set()
     page = 0
 
-    logger.info("Fetching Mapillary images for SF bbox in %dx%d tiles…", TILE_GRID_SIZE, TILE_GRID_SIZE)
+    logger.info("Fetching Mapillary images for Boulder bbox in %dx%d tiles…", TILE_GRID_SIZE, TILE_GRID_SIZE)
     tile_queue: list[tuple[dict[str, float], int]] = [
         (tile_bbox, 0) for tile_bbox in _iter_bbox_tiles(BBOX, TILE_GRID_SIZE)
     ]
