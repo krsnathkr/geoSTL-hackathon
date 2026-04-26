@@ -62,7 +62,8 @@ def fetch_sequences(
     seen_frame_ids: set[str] = set()
     page = 0
 
-    logger.info("Fetching Mapillary images for Boulder bbox in %dx%d tiles…", TILE_GRID_SIZE, TILE_GRID_SIZE)
+    logger.info("Fetching Mapillary images for San Francisco bbox in %dx%d tiles…", TILE_GRID_SIZE, TILE_GRID_SIZE)
+    skipped_tiles: list[dict[str, Any]] = []
     tile_queue: list[tuple[dict[str, float], int]] = [
         (tile_bbox, 0) for tile_bbox in _iter_bbox_tiles(BBOX, TILE_GRID_SIZE)
     ]
@@ -109,7 +110,13 @@ def fetch_sequences(
                 params["after"] = next_cursor
         except RuntimeError:
             if depth >= MAX_TILE_SUBDIVISION_DEPTH:
-                raise
+                logger.error(
+                    "Skipping bbox %s after repeated Mapillary failures at max depth %d",
+                    _bbox_to_string(tile_bbox),
+                    depth,
+                )
+                skipped_tiles.append({"bbox": tile_bbox, "depth": depth})
+                continue
             logger.warning(
                 "Tile query failed, subdividing bbox %s at depth %d",
                 _bbox_to_string(tile_bbox),
@@ -123,6 +130,8 @@ def fetch_sequences(
 
     sequences = _group_by_sequence(all_frames)
     logger.info("Grouped into %d sequences", len(sequences))
+    if skipped_tiles:
+        logger.warning("Skipped %d Mapillary tiles after exhausting retries", len(skipped_tiles))
 
     with open(out_path, "w") as f:
         json.dump(sequences, f)

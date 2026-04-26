@@ -12,7 +12,7 @@
   --miscategorized: #d7b312;
   --validated: #4b7f52;
   --radius: 10px;
-  --sidebar-width: 380px;
+  --sidebar-width: clamp(500px, 38vw, 640px);
 }
 
 * {
@@ -213,6 +213,7 @@ body {
 .tab-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 14px;
   min-height: 0;
 }
@@ -328,6 +329,7 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-bottom: 14px;
+  min-width: 0;
 }
 
 .stat-card {
@@ -335,6 +337,7 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   background: rgba(255,255,255,0.6);
+  min-width: 0;
 }
 
 .stat-card .stat-label {
@@ -344,6 +347,7 @@ body {
   letter-spacing: 0.6px;
   color: var(--muted);
   margin-bottom: 4px;
+  word-break: break-word;
 }
 
 .stat-card .stat-value {
@@ -352,12 +356,24 @@ body {
   font-family: "Space Grotesk", "Avenir Next", sans-serif;
   color: var(--ink);
   letter-spacing: -0.5px;
+  min-width: 0;
+  word-break: break-word;
 }
 
 /* ── Charts ── */
 .chart {
   min-height: 200px;
   margin-bottom: 10px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.js-plotly-plot,
+.js-plotly-plot .plot-container,
+.js-plotly-plot .svg-container {
+  width: 100% !important;
+  max-width: 100%;
 }
 
 /* ── Comparison table ── */
@@ -526,5 +542,9 @@ body {
 
   .sidebar {
     overflow: visible;
+  }
+
+  .stat-grid {
+    grid-template-columns: 1fr;
   }
 }

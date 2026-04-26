@@ -11,11 +11,12 @@ def _env_float(name: str, default: float) -> float:
 
 
 BBOX = {
-    # Approximate Boulder citywide bounding box. Override via env when needed.
-    "min_lon": _env_float("BBOX_MIN_LON", -105.3010),
-    "min_lat": _env_float("BBOX_MIN_LAT", 39.9530),
-    "max_lon": _env_float("BBOX_MAX_LON", -105.1785),
-    "max_lat": _env_float("BBOX_MAX_LAT", 40.0946),
+    # Mission District / SoMa core — mid-SF, dense street coverage on Mapillary.
+    # Override via env when needed.
+    "min_lon": _env_float("BBOX_MIN_LON", -122.425),
+    "min_lat": _env_float("BBOX_MIN_LAT", 37.755),
+    "max_lon": _env_float("BBOX_MAX_LON", -122.395),
+    "max_lat": _env_float("BBOX_MAX_LAT", 37.780),
 }
 
 AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
@@ -53,7 +54,7 @@ FRAME_SAMPLE_INTERVAL = 5   # seconds between sampled frames
 CLIP_FRAME_DURATION_SEC = _env_float("CLIP_FRAME_DURATION_SEC", 1.0)
 CLIP_OUTPUT_FPS = int(os.getenv("CLIP_OUTPUT_FPS", "30"))
 POI_MATCH_RADIUS_M = 50     # meters for Overture proximity match
-UTM_CRS = "EPSG:32613"      # UTM zone 13N for Colorado
+UTM_CRS = "EPSG:32610"      # UTM zone 10N for San Francisco
 WGS84_CRS = "EPSG:4326"
 
 OVERTURE_RELEASE = "2026-04-15.0"

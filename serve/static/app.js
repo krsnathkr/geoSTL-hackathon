@@ -35,6 +35,23 @@ function switchTab(tabName) {
   document.querySelectorAll(".tab-content").forEach((c) => c.classList.add("hidden"));
   document.querySelector(`.tab-btn[data-tab="${tabName}"]`).classList.add("active");
   document.getElementById(`tab-${tabName}`).classList.remove("hidden");
+  queueTabPlotResize(tabName);
+}
+
+function queueTabPlotResize(tabName) {
+  const tab = document.getElementById(`tab-${tabName}`);
+  if (!tab || typeof Plotly === "undefined") {
+    return;
+  }
+
+  const resizePlots = () => {
+    tab.querySelectorAll(".js-plotly-plot").forEach((plot) => Plotly.Plots.resize(plot));
+  };
+
+  requestAnimationFrame(() => {
+    resizePlots();
+    window.setTimeout(resizePlots, 60);
+  });
 }
 
 // ── Data loading ──────────────────────────────────────
@@ -58,6 +75,7 @@ async function loadData() {
   renderDetections();
   renderMetrics(metrics);
   renderComparison(comparison);
+  queueTabPlotResize("detail");
 }
 
 function renderFilters(types) {
@@ -449,12 +467,13 @@ function renderMetrics(metrics) {
       },
     ],
     {
-      margin: { l: 36, r: 8, t: 28, b: 60 },
+      autosize: true,
+      margin: { l: 36, r: 8, t: 28, b: 56 },
       title: { text: "Detection Counts", font: { size: 13, family: "Space Grotesk, Avenir Next, sans-serif" } },
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: "rgba(0,0,0,0)",
-      xaxis: { tickfont: { size: 10 }, tickangle: -35 },
-      yaxis: { gridcolor: "rgba(0,0,0,0.06)" },
+      xaxis: { tickfont: { size: 10 }, tickangle: -28, automargin: true },
+      yaxis: { gridcolor: "rgba(0,0,0,0.06)", automargin: true },
     },
     { displayModeBar: false, responsive: true }
   );
@@ -470,12 +489,21 @@ function renderMetrics(metrics) {
     })),
     {
       barmode: "group",
-      margin: { l: 36, r: 8, t: 28, b: 36 },
+      autosize: true,
+      margin: { l: 36, r: 8, t: 28, b: 72 },
       title: { text: "Quality Metrics", font: { size: 13, family: "Space Grotesk, Avenir Next, sans-serif" } },
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: "rgba(0,0,0,0)",
-      yaxis: { range: [0, 1], gridcolor: "rgba(0,0,0,0.06)" },
-      legend: { font: { size: 10 } },
+      xaxis: { automargin: true },
+      yaxis: { range: [0, 1], gridcolor: "rgba(0,0,0,0.06)", automargin: true },
+      legend: {
+        orientation: "h",
+        x: 0,
+        xanchor: "left",
+        y: -0.24,
+        yanchor: "top",
+        font: { size: 9 },
+      },
     },
     { displayModeBar: false, responsive: true }
   );
@@ -523,12 +551,13 @@ function renderComparison(comparison) {
     ],
     {
       barmode: "group",
-      margin: { l: 36, r: 8, t: 28, b: 60 },
+      autosize: true,
+      margin: { l: 36, r: 8, t: 28, b: 56 },
       title: { text: "Video vs Baseline", font: { size: 13, family: "Space Grotesk, Avenir Next, sans-serif" } },
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: "rgba(0,0,0,0)",
-      xaxis: { tickfont: { size: 10 }, tickangle: -35 },
-      yaxis: { gridcolor: "rgba(0,0,0,0.06)" },
+      xaxis: { tickfont: { size: 10 }, tickangle: -28, automargin: true },
+      yaxis: { gridcolor: "rgba(0,0,0,0.06)", automargin: true },
       legend: { font: { size: 11 } },
     },
     { displayModeBar: false, responsive: true }
