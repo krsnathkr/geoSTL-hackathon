@@ -135,11 +135,16 @@ def run_pipeline(
         baseline_descriptions = context.get("baseline_descriptions") or load_json_artifact(
             os.path.join(data_processed_dir, "baseline_descriptions.json")
         )
-        overture_places = load_places(data_dir=data_raw_dir)
+        transport_segments = None
+        if not skip_transportation:
+            try:
+                transport_segments = load_transportation(data_dir=data_raw_dir)
+            except FileNotFoundError:
+                logger.warning("Transportation artifact missing; continuing with standalone sidewalk observations")
 
         logger.info("Stage analyze: cross-referencing observations")
-        detections = cross_reference(descriptions, overture_places)
-        baseline_detections = cross_reference(baseline_descriptions, overture_places)
+        detections = cross_reference(descriptions, transport_segments)
+        baseline_detections = cross_reference(baseline_descriptions, transport_segments)
         export_paths = export_all(detections, output_dir=data_output_dir, exclude_validated=True)
         baseline_export_paths = {
             "geojson": to_geojson(

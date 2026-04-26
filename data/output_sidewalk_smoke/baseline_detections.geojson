@@ -1,0 +1,9 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "overture_release": "2026-04-15.0",
+    "crs": "EPSG:4326",
+    "detection_types": []
+  },
+  "features": []
+}

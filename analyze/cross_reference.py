@@ -1,17 +1,15 @@
 """
-Cross-reference Pegasus observations against Overture Places.
+Convert Pegasus sidewalk observations into inventory findings.
 
-Classification rules:
-  missing        — observation is open, no Overture match within 50 m
-  stale          — observation is closed/vacant, Overture match exists
-  miscategorized — Overture match exists but categories diverge
-  validated      — Overture match exists and categories agree (no discrepancy)
+This module no longer treats observations as POI discrepancies. Instead it
+emits one or more sidewalk findings per sequence, optionally linked to the
+nearest Overture transportation segment when that dataset is available.
 """
 
 import json
 import logging
 import os
-from difflib import SequenceMatcher
+import re
 from typing import Optional
 
 import geopandas as gpd
@@ -27,26 +25,39 @@ from config.settings import (
 
 logger = logging.getLogger(__name__)
 
-# Map Pegasus category labels → Overture primary category substrings
-CATEGORY_MAP: dict[str, list[str]] = {
-    "restaurant": ["restaurant", "food", "dining", "eat"],
-    "cafe": ["cafe", "coffee", "tea", "bakery"],
-    "bar": ["bar", "pub", "nightlife", "brewery", "tavern"],
-    "retail": ["retail", "shop", "store", "market", "boutique"],
-    "hotel": ["hotel", "motel", "lodging", "inn", "hostel"],
-    "office": ["office", "professional", "financial", "bank"],
-    "service": ["service", "salon", "spa", "laundry", "repair", "gym", "fitness"],
-    "other": [],
-}
-
-CLOSED_CONDITIONS = {"closed", "vacant", "under_construction"}
-OPEN_CONDITIONS = {"open"}
+TRANSPORT_MATCH_RADIUS_M = POI_MATCH_RADIUS_M
 
 
 def load_descriptions(data_dir: str = DATA_PROCESSED) -> list[dict]:
     path = os.path.join(data_dir, "descriptions.json")
     with open(path) as f:
         return json.load(f)
+
+
+def _output_columns() -> list[str]:
+    return [
+        "obs_id",
+        "detection_type",
+        "confidence",
+        "obs_name",
+        "obs_category",
+        "obs_condition",
+        "obs_description",
+        "sidewalk_presence",
+        "sidewalk_width_m",
+        "curb_ramp_status",
+        "obstructions",
+        "hazards",
+        "crossing_features",
+        "transport_id",
+        "transport_name",
+        "transport_class",
+        "match_distance_m",
+        "clip_s3_uri",
+        "frame_ids",
+        "lat",
+        "lon",
+    ]
 
 
 def _empty_detections_gdf() -> gpd.GeoDataFrame:
@@ -57,170 +68,198 @@ def _empty_detections_gdf() -> gpd.GeoDataFrame:
     )
 
 
+def _normalize_label(value: str) -> str:
+    label = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower()).strip("_")
+    return label or "unknown"
+
+
+def _string_list(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list):
+            return [str(v).strip() for v in parsed if str(v).strip()]
+        return [item.strip() for item in text.split(",") if item.strip()]
+    return [str(value).strip()] if str(value).strip() else []
+
+
 def descriptions_to_gdf(descriptions: list[dict]) -> gpd.GeoDataFrame:
-    """Convert Pegasus description dicts to a GeoDataFrame (WGS84)."""
     rows = []
     for d in descriptions:
         if d.get("lat") is None or d.get("lon") is None:
             continue
-        rows.append({
-            "obs_id": d["sequence_id"],
-            "name": d.get("name", ""),
-            "category": d.get("category", "other"),
-            "condition": d.get("condition", "unknown"),
-            "description": d.get("description", ""),
-            "clip_s3_uri": d.get("clip_s3_uri", ""),
-            "frame_ids": json.dumps(d.get("frame_ids", [])),
-            "lat": d["lat"],
-            "lon": d["lon"],
-            "geometry": Point(d["lon"], d["lat"]),
-        })
+        rows.append(
+            {
+                "obs_id": d["sequence_id"],
+                "name": d.get("name", "sidewalk_segment"),
+                "category": d.get("category", "sidewalk"),
+                "condition": d.get("condition", "unknown"),
+                "description": d.get("description", ""),
+                "sidewalk_presence": d.get("sidewalk_presence", "unclear"),
+                "sidewalk_width_m": d.get("sidewalk_width_m"),
+                "curb_ramp_status": d.get("curb_ramp_status", "unclear"),
+                "obstructions": _string_list(d.get("obstructions")),
+                "hazards": _string_list(d.get("hazards")),
+                "crossing_features": _string_list(d.get("crossing_features")),
+                "clip_s3_uri": d.get("clip_s3_uri", ""),
+                "frame_ids": json.dumps(d.get("frame_ids", [])),
+                "lat": d["lat"],
+                "lon": d["lon"],
+                "geometry": Point(d["lon"], d["lat"]),
+            }
+        )
     if not rows:
         return gpd.GeoDataFrame(geometry=gpd.GeoSeries([], crs=WGS84_CRS))
     return gpd.GeoDataFrame(rows, geometry="geometry", crs=WGS84_CRS)
 
 
-def _categories_match(obs_category: str, overture_category: str) -> bool:
-    """Return True if Pegasus category is compatible with Overture category string."""
-    ov = (overture_category or "").lower()
-    synonyms = CATEGORY_MAP.get(obs_category, [])
-    return any(s in ov for s in synonyms)
+def observation_confidence(row: pd.Series) -> float:
+    score = 0.55
+    if row.get("sidewalk_presence") in {"present", "absent"}:
+        score += 0.15
+    if row.get("sidewalk_width_m") is not None:
+        score += 0.05
+    if row.get("curb_ramp_status") in {"present", "absent", "not_applicable"}:
+        score += 0.05
+    if row.get("obstructions"):
+        score += 0.05
+    if row.get("hazards"):
+        score += 0.05
+    if row.get("crossing_features"):
+        score += 0.05
+    return round(min(score, 0.95), 3)
 
 
-def _name_similarity(a: str, b: str) -> float:
-    if not isinstance(a, str) or not isinstance(b, str) or not a or not b:
-        return 0.0
-    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+def classify_observation(row: pd.Series) -> list[str]:
+    findings: list[str] = []
+    presence = (row.get("sidewalk_presence") or "unclear").lower()
+    condition = (row.get("condition") or "unknown").lower()
+    curb_ramp_status = (row.get("curb_ramp_status") or "unclear").lower()
+    obstructions = [_normalize_label(v) for v in row.get("obstructions") or []]
+    hazards = [_normalize_label(v) for v in row.get("hazards") or []]
+
+    if presence == "absent":
+        findings.append("sidewalk_missing")
+    elif presence == "unclear":
+        findings.append("sidewalk_unclear")
+    else:
+        findings.append("sidewalk_present")
+
+    if curb_ramp_status == "absent":
+        findings.append("curb_ramp_missing")
+
+    if condition == "poor":
+        findings.append("poor_condition")
+    elif condition == "blocked":
+        findings.append("blocked_path")
+    elif condition == "under_construction":
+        findings.append("construction")
+
+    if obstructions:
+        findings.append("obstruction")
+
+    if any("pothole" in hazard for hazard in hazards):
+        findings.append("pothole")
+    if any(
+        hazard in {"uneven_surface", "broken_pavement", "trip_hazard", "surface_damage"}
+        for hazard in hazards
+    ):
+        findings.append("surface_hazard")
+    if any(hazard in {"construction_zone", "construction"} for hazard in hazards):
+        findings.append("construction")
+    if any(hazard in {"debris", "standing_water", "ice", "flooding"} for hazard in hazards):
+        findings.append("hazard")
+
+    deduped: list[str] = []
+    for finding in findings:
+        if finding not in deduped:
+            deduped.append(finding)
+    return deduped
 
 
-def _confidence(distance_m: float, name_sim: float, match_radius: float) -> float:
-    """Combine proximity and name similarity into a [0, 1] confidence score."""
-    if distance_m is None or pd.isna(distance_m):
-        return round(0.5 * name_sim, 3)
-    prox = max(0.0, 1.0 - distance_m / match_radius)
-    return round(0.6 * prox + 0.4 * name_sim, 3)
-
-
-def classify_detection(
-    obs_name: str,
-    obs_category: str,
-    obs_condition: str,
-    overture_name: Optional[str],
-    overture_category: Optional[str],
-    distance_m: Optional[float],
-    match_radius: float = POI_MATCH_RADIUS_M,
-) -> tuple[str, float]:
-    """
-    Return (detection_type, confidence_score).
-
-    detection_type: "missing" | "stale" | "miscategorized" | "validated"
-    """
-    has_match = distance_m is not None and not pd.isna(distance_m)
-    name_sim = _name_similarity(obs_name, overture_name or "")
-
-    if not has_match:
-        # No Overture POI nearby
-        if obs_condition in OPEN_CONDITIONS:
-            return "missing", round(0.55 + 0.15 * (name_sim == 0), 3)
-        return "stale", 0.5  # might have existed and closed
-
-    # Overture match found
-    conf = _confidence(distance_m, name_sim, match_radius)
-    if obs_condition in CLOSED_CONDITIONS:
-        return "stale", conf
-    if not _categories_match(obs_category, overture_category or ""):
-        return "miscategorized", conf
-    return "validated", conf
+def _transport_columns(transport_segments: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    cols = [col for col in ["id", "name", "class", "subclass", "geometry"] if col in transport_segments.columns]
+    return transport_segments[cols]
 
 
 def cross_reference(
     descriptions: list[dict],
-    overture_places: gpd.GeoDataFrame,
-    match_radius_m: float = POI_MATCH_RADIUS_M,
+    transport_segments: Optional[gpd.GeoDataFrame] = None,
+    match_radius_m: float = TRANSPORT_MATCH_RADIUS_M,
 ) -> gpd.GeoDataFrame:
-    """
-    Spatial-join observations to Overture Places, classify each detection.
-
-    Returns a GeoDataFrame in WGS84 with one row per observation.
-    """
     obs_gdf = descriptions_to_gdf(descriptions)
     if obs_gdf.empty:
         logger.warning("No observations with valid coordinates")
         return _empty_detections_gdf()
 
-    # Project to UTM for metre-accurate proximity matching
-    obs_utm = obs_gdf.to_crs(UTM_CRS)
-    ov_utm = overture_places[["id", "name", "category", "geometry"]].to_crs(UTM_CRS)
-
-    joined = gpd.sjoin_nearest(
-        obs_utm,
-        ov_utm,
-        how="left",
-        max_distance=match_radius_m,
-        distance_col="distance_m",
-        rsuffix="ov",
-    )
-    # sjoin_nearest renames conflicting obs columns; normalise back to plain names
-    rename = {}
-    for suffix in ("_left", "_"):
-        if f"name{suffix}" in joined.columns:
-            rename[f"name{suffix}"] = "name"
-        if f"category{suffix}" in joined.columns:
-            rename[f"category{suffix}"] = "category"
-    if rename:
-        joined = joined.rename(columns=rename)
+    joined = obs_gdf.copy()
+    if transport_segments is not None and not transport_segments.empty:
+        obs_utm = obs_gdf.to_crs(UTM_CRS)
+        transport_utm = _transport_columns(transport_segments).to_crs(UTM_CRS)
+        joined = gpd.sjoin_nearest(
+            obs_utm,
+            transport_utm,
+            how="left",
+            max_distance=match_radius_m,
+            distance_col="match_distance_m",
+            rsuffix="transport",
+        ).to_crs(WGS84_CRS)
+    else:
+        joined["match_distance_m"] = None
 
     rows = []
     for _, row in joined.iterrows():
-        ov_name_raw = row.get("name_ov")
-        ov_cat_raw = row.get("category_ov")
-        det_type, conf = classify_detection(
-            obs_name=row.get("name", ""),
-            obs_category=row.get("category", ""),
-            obs_condition=row.get("condition", "unknown"),
-            overture_name=ov_name_raw if isinstance(ov_name_raw, str) else None,
-            overture_category=ov_cat_raw if isinstance(ov_cat_raw, str) else None,
-            distance_m=row.get("distance_m"),
-            match_radius=match_radius_m,
-        )
-        # After sjoin_nearest with rsuffix="ov":
-        #   obs columns keep their names; overture 'name'/'category' → 'name_ov'/'category_ov'
-        #   overture 'id' has no conflict so stays as 'id'
-        raw_id = row.get("id")
-        gers = "" if (raw_id is None or (isinstance(raw_id, float) and pd.isna(raw_id))) else str(raw_id)
-        ov_name = row.get("name_ov", "")
-        ov_cat = row.get("category_ov", "")
-        rows.append({
-            "obs_id": row["obs_id"],
-            "detection_type": det_type,
-            "confidence": conf,
-            "obs_name": row.get("name", ""),
-            "obs_category": row.get("category", ""),
-            "obs_condition": row.get("condition", "unknown"),
-            "obs_description": row.get("description", ""),
-            "gers_id": gers,
-            "overture_name": ov_name if isinstance(ov_name, str) else "",
-            "overture_category": ov_cat if isinstance(ov_cat, str) else "",
-            "distance_m": row.get("distance_m"),
-            "clip_s3_uri": row.get("clip_s3_uri", ""),
-            "frame_ids": row.get("frame_ids", "[]"),
-            "lat": row.get("lat"),
-            "lon": row.get("lon"),
-            "geometry": Point(row["lon"], row["lat"]),
-        })
+        findings = classify_observation(row)
+        confidence = observation_confidence(row)
+        transport_id = row.get("id")
+        transport_name = row.get("name_transport", row.get("name_right", ""))
+        transport_class = row.get("class", "")
+        if not isinstance(transport_name, str):
+            transport_name = ""
+        if not isinstance(transport_class, str):
+            transport_class = ""
+
+        for finding_index, finding in enumerate(findings):
+            rows.append(
+                {
+                    "obs_id": f"{row['obs_id']}:{finding_index}",
+                    "detection_type": finding,
+                    "confidence": confidence,
+                    "obs_name": row.get("name", "sidewalk_segment"),
+                    "obs_category": row.get("category", "sidewalk"),
+                    "obs_condition": row.get("condition", "unknown"),
+                    "obs_description": row.get("description", ""),
+                    "sidewalk_presence": row.get("sidewalk_presence", "unclear"),
+                    "sidewalk_width_m": row.get("sidewalk_width_m"),
+                    "curb_ramp_status": row.get("curb_ramp_status", "unclear"),
+                    "obstructions": json.dumps(row.get("obstructions", [])),
+                    "hazards": json.dumps(row.get("hazards", [])),
+                    "crossing_features": json.dumps(row.get("crossing_features", [])),
+                    "transport_id": "" if transport_id is None or (isinstance(transport_id, float) and pd.isna(transport_id)) else str(transport_id),
+                    "transport_name": transport_name,
+                    "transport_class": transport_class,
+                    "match_distance_m": row.get("match_distance_m"),
+                    "clip_s3_uri": row.get("clip_s3_uri", ""),
+                    "frame_ids": row.get("frame_ids", "[]"),
+                    "lat": row.get("lat"),
+                    "lon": row.get("lon"),
+                    "geometry": Point(row["lon"], row["lat"]),
+                }
+            )
 
     gdf = gpd.GeoDataFrame(rows, geometry="geometry", crs=WGS84_CRS)
     logger.info(
-        "Cross-reference complete: %d total (%s)",
+        "Inventory analysis complete: %d findings (%s)",
         len(gdf),
         ", ".join(f"{t}={n}" for t, n in gdf["detection_type"].value_counts().items()),
     )
     return gdf
-
-
-def _output_columns() -> list[str]:
-    return [
-        "obs_id", "detection_type", "confidence", "obs_name", "obs_category",
-        "obs_condition", "obs_description", "gers_id", "overture_name", "overture_category",
-        "distance_m", "clip_s3_uri", "frame_ids", "lat", "lon",
-    ]

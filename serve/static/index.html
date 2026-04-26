@@ -12,7 +12,7 @@
       <header class="topbar">
         <div>
           <h1>GeoSTL Video Intelligence</h1>
-          <p>Commercial corridor freshness audit</p>
+          <p>Sidewalk infrastructure inventory</p>
         </div>
         <div id="status-pill" class="status-pill">Loading</div>
       </header>
@@ -25,10 +25,7 @@
         <aside class="sidebar">
           <section class="panel">
             <h2>Filters</h2>
-            <label><input type="checkbox" value="stale" checked /> Stale</label>
-            <label><input type="checkbox" value="missing" checked /> Missing</label>
-            <label><input type="checkbox" value="miscategorized" checked /> Miscategorized</label>
-            <label><input type="checkbox" value="validated" /> Validated</label>
+            <div id="filters-list"></div>
           </section>
 
           <section class="panel">
@@ -39,8 +36,13 @@
               <div><dt>Type</dt><dd id="detail-type"></dd></div>
               <div><dt>Condition</dt><dd id="detail-condition"></dd></div>
               <div><dt>Confidence</dt><dd id="detail-confidence"></dd></div>
-              <div><dt>GERS</dt><dd id="detail-gers"></dd></div>
-              <div><dt>Overture</dt><dd id="detail-overture"></dd></div>
+              <div><dt>Sidewalk Presence</dt><dd id="detail-presence"></dd></div>
+              <div><dt>Width (m)</dt><dd id="detail-width"></dd></div>
+              <div><dt>Curb Ramp</dt><dd id="detail-curb-ramp"></dd></div>
+              <div><dt>Obstructions</dt><dd id="detail-obstructions"></dd></div>
+              <div><dt>Hazards</dt><dd id="detail-hazards"></dd></div>
+              <div><dt>Crossing Features</dt><dd id="detail-crossings"></dd></div>
+              <div><dt>Transport Segment</dt><dd id="detail-transport"></dd></div>
               <div><dt>Description</dt><dd id="detail-description" style="white-space:pre-wrap;font-size:0.85em;color:#475569;"></dd></div>
               <div><dt>Clip</dt><dd id="detail-clip"></dd><video id="detail-video" controls style="width:100%;margin-top:6px;display:none;border-radius:6px;"></video></div>
             </dl>

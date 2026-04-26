@@ -16,15 +16,22 @@ def _make_detections():
     rows = [
         {
             "obs_id": "seq-1",
-            "detection_type": "stale",
+            "detection_type": "pothole",
             "confidence": 0.82,
-            "obs_name": "Blue Bottle",
-            "obs_category": "cafe",
-            "obs_condition": "closed",
-            "gers_id": "gers-001",
-            "overture_name": "Blue Bottle Coffee",
-            "overture_category": "cafe",
-            "distance_m": 8.5,
+            "obs_name": "sidewalk_segment",
+            "obs_category": "sidewalk",
+            "obs_condition": "poor",
+            "obs_description": "Pothole visible in the walking path.",
+            "sidewalk_presence": "present",
+            "sidewalk_width_m": 1.4,
+            "curb_ramp_status": "present",
+            "obstructions": '[]',
+            "hazards": '["pothole"]',
+            "crossing_features": '["crosswalk"]',
+            "transport_id": "segment-001",
+            "transport_name": "Pearl Street",
+            "transport_class": "residential",
+            "match_distance_m": 8.5,
             "clip_s3_uri": "s3://bucket/clip1.mp4",
             "frame_ids": '["f1", "f2"]',
             "lat": 37.77,
@@ -32,15 +39,22 @@ def _make_detections():
         },
         {
             "obs_id": "seq-2",
-            "detection_type": "missing",
+            "detection_type": "sidewalk_missing",
             "confidence": 0.68,
-            "obs_name": "New Taqueria",
-            "obs_category": "restaurant",
-            "obs_condition": "open",
-            "gers_id": "",
-            "overture_name": "",
-            "overture_category": "",
-            "distance_m": None,
+            "obs_name": "sidewalk_segment",
+            "obs_category": "sidewalk",
+            "obs_condition": "unknown",
+            "obs_description": "No continuous sidewalk is visible.",
+            "sidewalk_presence": "absent",
+            "sidewalk_width_m": None,
+            "curb_ramp_status": "not_applicable",
+            "obstructions": '[]',
+            "hazards": '[]',
+            "crossing_features": '[]',
+            "transport_id": "",
+            "transport_name": "",
+            "transport_class": "",
+            "match_distance_m": None,
             "clip_s3_uri": "s3://bucket/clip2.mp4",
             "frame_ids": '["f3"]',
             "lat": 37.78,
@@ -48,15 +62,22 @@ def _make_detections():
         },
         {
             "obs_id": "seq-3",
-            "detection_type": "validated",
+            "detection_type": "sidewalk_present",
             "confidence": 0.91,
-            "obs_name": "Starbucks",
-            "obs_category": "cafe",
-            "obs_condition": "open",
-            "gers_id": "gers-002",
-            "overture_name": "Starbucks",
-            "overture_category": "cafe",
-            "distance_m": 3.0,
+            "obs_name": "sidewalk_segment",
+            "obs_category": "sidewalk",
+            "obs_condition": "good",
+            "obs_description": "Continuous sidewalk with curb ramp.",
+            "sidewalk_presence": "present",
+            "sidewalk_width_m": 2.0,
+            "curb_ramp_status": "present",
+            "obstructions": '[]',
+            "hazards": '[]',
+            "crossing_features": '["tactile_paving"]',
+            "transport_id": "segment-002",
+            "transport_name": "Walnut Street",
+            "transport_class": "residential",
+            "match_distance_m": 3.0,
             "clip_s3_uri": "",
             "frame_ids": "[]",
             "lat": 37.79,
@@ -89,7 +110,8 @@ def test_to_geojson_valid_structure():
         assert feat["type"] == "Feature"
         assert feat["geometry"]["type"] == "Point"
         assert "detection_type" in feat["properties"]
-        assert "gers_id" in feat["properties"]
+        assert "hazards" in feat["properties"]
+        assert "transport_id" in feat["properties"]
 
 
 def test_to_geojson_exclude_validated():
@@ -98,7 +120,7 @@ def test_to_geojson_exclude_validated():
         with open(path) as f:
             fc = json.load(f)
         types = [f["properties"]["detection_type"] for f in fc["features"]]
-        assert "validated" not in types
+        assert "sidewalk_present" not in types
         assert len(fc["features"]) == 2
 
 
@@ -123,8 +145,8 @@ def test_to_geoparquet_roundtrip():
         to_geoparquet(_make_detections(), output_dir=tmp)
         loaded = gpd.read_parquet(os.path.join(tmp, "detections.geoparquet"))
         assert len(loaded) == 3
-        assert "discrepancy_type" in loaded.columns  # renamed from detection_type
-        assert "overture_id" in loaded.columns  # renamed from gers_id
+        assert "detection_type" in loaded.columns
+        assert "transport_id" in loaded.columns
 
 
 def test_to_geoparquet_exclude_validated():
@@ -132,7 +154,7 @@ def test_to_geoparquet_exclude_validated():
         to_geoparquet(_make_detections(), output_dir=tmp, exclude_validated=True)
         loaded = gpd.read_parquet(os.path.join(tmp, "detections.geoparquet"))
         assert len(loaded) == 2
-        assert "validated" not in loaded["discrepancy_type"].values
+        assert "sidewalk_present" not in loaded["detection_type"].values
 
 
 # ── export_all + load_detections ──────────────────────────────────────────────

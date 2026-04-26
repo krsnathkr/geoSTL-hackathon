@@ -1,8 +1,15 @@
 const palette = {
-  stale: "#d94841",
-  missing: "#ff8f00",
-  miscategorized: "#d7b312",
-  validated: "#4b7f52",
+  sidewalk_present: "#2f855a",
+  sidewalk_missing: "#d94841",
+  sidewalk_unclear: "#718096",
+  curb_ramp_missing: "#ff8f00",
+  obstruction: "#c05621",
+  pothole: "#805ad5",
+  construction: "#dd6b20",
+  poor_condition: "#b7791f",
+  blocked_path: "#9b2c2c",
+  hazard: "#6b46c1",
+  surface_hazard: "#8b5cf6",
 };
 
 const map = L.map("map", { zoomControl: true }).setView([40.005, -105.265], 14);
@@ -30,11 +37,26 @@ async function loadData() {
   const comparison = await comparisonResponse.json();
 
   detections = detectionCollection.features || [];
+  renderFilters(detectionCollection.metadata?.detection_types || []);
   renderStatus(detectionCollection, metrics, sequenceCollection, comparison);
   renderSequences(sequenceCollection.features || []);
   renderDetections();
   renderMetrics(metrics);
   renderComparison(comparison);
+}
+
+function renderFilters(types) {
+  const list = document.getElementById("filters-list");
+  const orderedTypes = (types.length ? types : [...new Set(detections.map((f) => f.properties.detection_type))]).sort();
+  list.innerHTML = orderedTypes
+    .map(
+      (type) =>
+        `<label><input type="checkbox" value="${type}" checked /> ${type.replaceAll("_", " ")}</label>`
+    )
+    .join("");
+  list.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    input.addEventListener("change", renderDetections);
+  });
 }
 
 function renderStatus(detectionCollection, metrics, sequenceCollection, comparison) {
@@ -103,9 +125,20 @@ function showDetail(feature) {
   document.getElementById("detail-type").textContent = feature.properties.detection_type || "";
   document.getElementById("detail-condition").textContent = feature.properties.obs_condition || "";
   document.getElementById("detail-confidence").textContent = feature.properties.confidence ?? "";
-  document.getElementById("detail-gers").textContent = feature.properties.gers_id || "No match";
-  document.getElementById("detail-overture").textContent =
-    feature.properties.overture_name || "No Overture feature";
+  document.getElementById("detail-presence").textContent =
+    feature.properties.sidewalk_presence || "";
+  document.getElementById("detail-width").textContent =
+    feature.properties.sidewalk_width_m ?? "n/a";
+  document.getElementById("detail-curb-ramp").textContent =
+    feature.properties.curb_ramp_status || "";
+  document.getElementById("detail-obstructions").textContent =
+    feature.properties.obstructions || "[]";
+  document.getElementById("detail-hazards").textContent =
+    feature.properties.hazards || "[]";
+  document.getElementById("detail-crossings").textContent =
+    feature.properties.crossing_features || "[]";
+  document.getElementById("detail-transport").textContent =
+    feature.properties.transport_name || feature.properties.transport_id || "No matched transport segment";
   document.getElementById("detail-description").textContent =
     feature.properties.obs_description || "";
 
@@ -140,6 +173,9 @@ function renderMetrics(metrics) {
   `;
 
   const typeCounts = metrics.type_counts || {};
+  const qualityTypes = Object.keys(metrics).filter(
+    (key) => metrics[key] && typeof metrics[key] === "object" && "precision" in metrics[key]
+  );
   Plotly.newPlot(
     "counts-chart",
     [
@@ -159,7 +195,6 @@ function renderMetrics(metrics) {
     { displayModeBar: false, responsive: true }
   );
 
-  const qualityTypes = ["missing", "stale", "miscategorized"];
   Plotly.newPlot(
     "quality-chart",
     qualityTypes.map((type) => ({

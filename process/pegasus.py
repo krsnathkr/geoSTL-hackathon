@@ -1,11 +1,11 @@
 """
-Generate structured POI descriptions from video clips via Pegasus 1.2 on Bedrock.
+Generate structured sidewalk-inventory descriptions from video clips via Pegasus 1.2 on Bedrock.
 
 Pegasus accepts VIDEO only (not still images). This module:
   1. Stitches sampled JPEG frames into a short MP4 clip via ffmpeg
   2. Uploads the clip to S3
   3. Calls Pegasus via InvokeModelWithResponseStream
-  4. Parses the text response into {name, category, condition}
+  4. Parses the text response into a sidewalk observation record
 
 Output: data/processed/descriptions.json
 """
@@ -20,6 +20,8 @@ from typing import Optional
 
 from config.settings import (
     AWS_REGION,
+    CLIP_FRAME_DURATION_SEC,
+    CLIP_OUTPUT_FPS,
     DATA_PROCESSED,
     FRAME_SAMPLE_INTERVAL,
     PEGASUS_MODEL_ID,
@@ -30,27 +32,63 @@ from process.twelvelabs import get_bedrock_client, upload_to_s3, _s3_location
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROMPT = (
-    "You are analyzing a street-level video sequence for a geospatial audit. "
-    "Examine the video carefully and return a JSON object with exactly these keys:\n"
-    '{"name": "<name from signage, or descriptive label if no signage: e.g. \'residential street\', \'park trail\', \'university building\'>", '
-    '"category": "<one of: restaurant, cafe, retail, office, hotel, bar, service, residential, park, university, parking, transit, trail, other>", '
-    '"condition": "<one of: open, closed, vacant, under_construction, good, fair, poor, unknown>", '
-    '"description": "<2-3 sentences: describe the buildings, signs, activity, infrastructure, and surroundings visible in the video>"}\n'
-    "Extract the most prominent feature. If no business is visible, describe the area type (park, residential, campus, commercial corridor, etc). "
-    "Respond ONLY with valid JSON, no other text."
+    "You are analyzing a short street-level video for Sidewalk Infrastructure Inventory. "
+    "Focus on pedestrian infrastructure, not businesses or general scene summaries. "
+    "Return valid JSON with exactly these keys:\n"
+    '{'
+    '"name": "<short sidewalk segment label such as a nearby street/intersection name if visible, otherwise sidewalk_segment>", '
+    '"category": "sidewalk", '
+    '"condition": "<one of: good, fair, poor, blocked, under_construction, unknown>", '
+    '"sidewalk_presence": "<one of: present, absent, unclear>", '
+    '"sidewalk_width_m": "<numeric width estimate in meters, or null if unclear>", '
+    '"curb_ramp_status": "<one of: present, absent, unclear, not_applicable>", '
+    '"obstructions": "<array of short obstruction labels, or [] if none visible>", '
+    '"hazards": "<array of short surface/safety hazard labels such as pothole, debris, uneven_surface, standing_water, construction_zone, or []>", '
+    '"crossing_features": "<array of short crossing/accessibility feature labels such as crosswalk, tactile_paving, pedestrian_signal, median_refuge, or []>", '
+    '"description": "<1-2 sentences describing only sidewalk evidence: presence, width, surface, curb ramps, crossings, obstructions, and condition>"}\n'
+    "Rules:\n"
+    "- Prefer concrete sidewalk evidence over broad environment description.\n"
+    "- If the sidewalk cannot be confirmed, use sidewalk_presence=unclear.\n"
+    "- Estimate width conservatively in meters only when the clip supports it; otherwise use null.\n"
+    "- Use blocked only when the walking path is materially obstructed.\n"
+    "- Use under_construction only for clear construction impacts on the pedestrian path.\n"
+    "- Do not invent storefront or POI names.\n"
+    "Respond with JSON only. No markdown or extra text."
 )
+
+
+def _coerce_float(value) -> float | None:
+    if value in (None, "", "null"):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_list(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return []
+        return [item.strip() for item in stripped.split(",") if item.strip()]
+    return [str(value).strip()] if str(value).strip() else []
 
 
 def frames_to_clip(
     frame_paths: list[str],
-    fps: int = 5,
+    fps: int = CLIP_OUTPUT_FPS,
     output_path: Optional[str] = None,
-    target_duration_sec: float = 10.0,
+    frame_duration_sec: float = CLIP_FRAME_DURATION_SEC,
 ) -> str:
     """
     Stitch a list of JPEG frame paths into an MP4 clip using ffmpeg.
 
-    fps controls the output frame rate (5fps from 5-second sampled frames ≈ real time).
+    Each image is shown for frame_duration_sec, then encoded at fps for smooth playback.
     Returns the path to the created MP4 file.
     """
     if not frame_paths:
@@ -63,18 +101,19 @@ def frames_to_clip(
 
     # Write frame paths to a concat file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as concat_file:
-        frame_duration = target_duration_sec / len(frame_paths)
         for path in frame_paths:
             concat_file.write(f"file '{os.path.abspath(path)}'\n")
-            concat_file.write(f"duration {frame_duration:.4f}\n")
+            concat_file.write(f"duration {frame_duration_sec:.4f}\n")
+        # Repeat the last frame once so ffmpeg honors the final duration entry.
+        concat_file.write(f"file '{os.path.abspath(frame_paths[-1])}'\n")
         concat_path = concat_file.name
 
     cmd = [
         "ffmpeg", "-y",
         "-f", "concat", "-safe", "0",
         "-i", concat_path,
-        "-vf", f"fps={fps}",
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-r", str(fps),
         "-movflags", "+faststart",
         output_path,
     ]
@@ -143,7 +182,7 @@ def describe_clip(
 
 def parse_description(raw_text: str) -> dict:
     """
-    Parse Pegasus output into {name, category, condition}.
+    Parse Pegasus output into a sidewalk observation record.
 
     Tries JSON first; falls back to regex extraction.
     """
@@ -156,6 +195,12 @@ def parse_description(raw_text: str) -> dict:
             "name": data.get("name", ""),
             "category": data.get("category", "other"),
             "condition": data.get("condition", "unknown"),
+            "sidewalk_presence": data.get("sidewalk_presence", "unclear"),
+            "sidewalk_width_m": _coerce_float(data.get("sidewalk_width_m")),
+            "curb_ramp_status": data.get("curb_ramp_status", "unclear"),
+            "obstructions": _coerce_list(data.get("obstructions")),
+            "hazards": _coerce_list(data.get("hazards")),
+            "crossing_features": _coerce_list(data.get("crossing_features")),
             "description": data.get("description", ""),
             "raw": raw_text,
         }
@@ -166,12 +211,24 @@ def parse_description(raw_text: str) -> dict:
     name_m = re.search(r'"?name"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
     cat_m = re.search(r'"?category"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
     cond_m = re.search(r'"?condition"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
+    sidewalk_presence_m = re.search(r'"?sidewalk_presence"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
+    sidewalk_width_m = re.search(r'"?sidewalk_width_m"?\s*[=:]\s*("?[\d\.]+"?|null)', text, re.IGNORECASE)
+    curb_ramp_status_m = re.search(r'"?curb_ramp_status"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
+    obstructions_m = re.search(r'"?obstructions"?\s*[=:]\s*\[([^\]]*)\]', text, re.IGNORECASE)
+    hazards_m = re.search(r'"?hazards"?\s*[=:]\s*\[([^\]]*)\]', text, re.IGNORECASE)
+    crossing_features_m = re.search(r'"?crossing_features"?\s*[=:]\s*\[([^\]]*)\]', text, re.IGNORECASE)
     desc_m = re.search(r'"?description"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
 
     return {
         "name": name_m.group(1) if name_m else "",
         "category": cat_m.group(1) if cat_m else "other",
         "condition": cond_m.group(1) if cond_m else "unknown",
+        "sidewalk_presence": sidewalk_presence_m.group(1) if sidewalk_presence_m else "unclear",
+        "sidewalk_width_m": _coerce_float(sidewalk_width_m.group(1).strip('"') if sidewalk_width_m else None),
+        "curb_ramp_status": curb_ramp_status_m.group(1) if curb_ramp_status_m else "unclear",
+        "obstructions": _coerce_list(obstructions_m.group(1) if obstructions_m else None),
+        "hazards": _coerce_list(hazards_m.group(1) if hazards_m else None),
+        "crossing_features": _coerce_list(crossing_features_m.group(1) if crossing_features_m else None),
         "description": desc_m.group(1) if desc_m else "",
         "raw": raw_text,
     }
@@ -212,6 +269,12 @@ def process_sequence_clip(
             "name": parsed["name"],
             "category": parsed["category"],
             "condition": parsed["condition"],
+            "sidewalk_presence": parsed["sidewalk_presence"],
+            "sidewalk_width_m": parsed["sidewalk_width_m"],
+            "curb_ramp_status": parsed["curb_ramp_status"],
+            "obstructions": parsed["obstructions"],
+            "hazards": parsed["hazards"],
+            "crossing_features": parsed["crossing_features"],
             "description": parsed.get("description", ""),
             "lat": centroid_lat,
             "lon": centroid_lon,

@@ -52,6 +52,29 @@ def test_parse_preserves_raw():
     assert result["raw"] == raw
 
 
+def test_parse_sidewalk_inventory_fields():
+    raw = json.dumps({
+        "name": "sidewalk_segment",
+        "category": "sidewalk",
+        "condition": "fair",
+        "sidewalk_presence": "present",
+        "sidewalk_width_m": 1.8,
+        "curb_ramp_status": "present",
+        "obstructions": ["utility_pole"],
+        "hazards": ["pothole"],
+        "crossing_features": ["crosswalk", "tactile_paving"],
+        "description": "A continuous sidewalk is present with a marked crossing.",
+    })
+    result = parse_description(raw)
+    assert result["category"] == "sidewalk"
+    assert result["sidewalk_presence"] == "present"
+    assert result["sidewalk_width_m"] == pytest.approx(1.8)
+    assert result["curb_ramp_status"] == "present"
+    assert result["obstructions"] == ["utility_pole"]
+    assert result["hazards"] == ["pothole"]
+    assert result["crossing_features"] == ["crosswalk", "tactile_paving"]
+
+
 # ── describe_clip ─────────────────────────────────────────────────────────────
 
 def _mock_stream_response(text: str) -> MagicMock:
@@ -134,7 +157,13 @@ def test_process_sequence_clip_full_pipeline(mock_clip, mock_upload):
     mock_upload.return_value = "s3://bucket/clips/seq1.mp4"
 
     client = MagicMock()
-    raw_resp = '{"name": "Sightglass Coffee", "category": "cafe", "condition": "open"}'
+    raw_resp = (
+        '{"name": "sidewalk_segment", "category": "sidewalk", "condition": "fair", '
+        '"sidewalk_presence": "present", "sidewalk_width_m": 1.5, '
+        '"curb_ramp_status": "present", "obstructions": ["sign_post"], '
+        '"hazards": ["pothole"], '
+        '"crossing_features": ["crosswalk"]}'
+    )
     client.invoke_model_with_response_stream.return_value = _mock_stream_response(raw_resp)
 
     frame_meta = [
@@ -150,9 +179,13 @@ def test_process_sequence_clip_full_pipeline(mock_clip, mock_upload):
     )
 
     assert result["sequence_id"] == "seq1"
-    assert result["name"] == "Sightglass Coffee"
-    assert result["category"] == "cafe"
-    assert result["condition"] == "open"
+    assert result["name"] == "sidewalk_segment"
+    assert result["category"] == "sidewalk"
+    assert result["condition"] == "fair"
+    assert result["sidewalk_presence"] == "present"
+    assert result["sidewalk_width_m"] == pytest.approx(1.5)
+    assert result["curb_ramp_status"] == "present"
+    assert result["hazards"] == ["pothole"]
     assert result["lat"] == pytest.approx((37.77 + 37.78) / 2)
 
 

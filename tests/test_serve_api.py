@@ -26,12 +26,18 @@ def test_api_returns_pipeline_outputs(tmp_path):
                     "type": "Feature",
                     "geometry": {"type": "Point", "coordinates": [-122.42, 37.77]},
                     "properties": {
-                        "obs_name": "Blue Bottle",
-                        "detection_type": "stale",
-                        "obs_condition": "closed",
+                        "obs_name": "sidewalk_segment",
+                        "detection_type": "pothole",
+                        "obs_condition": "poor",
                         "confidence": 0.82,
-                        "gers_id": "gers-001",
-                        "overture_name": "Blue Bottle Coffee",
+                        "sidewalk_presence": "present",
+                        "sidewalk_width_m": 1.4,
+                        "curb_ramp_status": "present",
+                        "obstructions": "[]",
+                        "hazards": "[\"pothole\"]",
+                        "crossing_features": "[\"crosswalk\"]",
+                        "transport_id": "segment-001",
+                        "transport_name": "Pearl Street",
                         "clip_s3_uri": "s3://bucket/clip.mp4",
                     },
                 }
@@ -41,7 +47,7 @@ def test_api_returns_pipeline_outputs(tmp_path):
     _write_json(
         output_dir / "metrics.json",
         {
-            "type_counts": {"stale": 1},
+            "type_counts": {"pothole": 1},
             "total_detections": 1,
             "discrepancy_count": 1,
             "rmse_m": 8.5,
@@ -63,8 +69,8 @@ def test_api_returns_pipeline_outputs(tmp_path):
                     "type": "Feature",
                     "geometry": {"type": "Point", "coordinates": [-122.42, 37.77]},
                     "properties": {
-                        "obs_name": "Blue Bottle",
-                        "detection_type": "missing",
+                        "obs_name": "sidewalk_segment",
+                        "detection_type": "sidewalk_present",
                     },
                 }
             ],
@@ -94,7 +100,7 @@ def test_api_returns_pipeline_outputs(tmp_path):
 
     assert detections.status_code == 200
     assert detections.json()["metadata"]["status"] == "ready"
-    assert detections.json()["features"][0]["properties"]["detection_type"] == "stale"
+    assert detections.json()["features"][0]["properties"]["detection_type"] == "pothole"
 
     assert metrics.status_code == 200
     assert metrics.json()["status"] == "ready"
@@ -110,7 +116,8 @@ def test_api_returns_pipeline_outputs(tmp_path):
     assert comparison.status_code == 200
     assert comparison.json()["status"] == "ready"
     assert comparison.json()["delta"] == 1
-    assert comparison.json()["by_type"][0]["baseline_count"] == 1
+    by_type = {row["detection_type"]: row for row in comparison.json()["by_type"]}
+    assert by_type["sidewalk_present"]["baseline_count"] == 1
 
     assert index.status_code == 200
     assert "GeoSTL Video Intelligence" in index.text

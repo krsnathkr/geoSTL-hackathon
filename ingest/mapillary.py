@@ -27,8 +27,7 @@ logger = logging.getLogger(__name__)
 IMAGES_ENDPOINT = f"{MAPILLARY_API_BASE}/images"
 IMAGE_DETAIL_ENDPOINT = f"{MAPILLARY_API_BASE}/{{image_id}}"
 
-# Fields to pull per frame. Prefer the original-width thumbnail when available,
-# and fall back to lower-resolution thumbnails if the API omits it.
+# Fields to pull per frame. We only download original-resolution frames.
 FRAME_FIELDS = "id,geometry,captured_at,sequence,compass_angle,thumb_original_url,thumb_2048_url,thumb_1024_url"
 
 # Max images per API page (Mapillary caps at 2000)
@@ -242,30 +241,30 @@ def _iter_bbox_tiles(bbox: dict[str, float], grid_size: int) -> list[dict[str, f
 
 
 def _preferred_image_url(frame: dict) -> str:
-    return (
-        frame.get("thumb_original_url")
-        or frame.get("thumb_2048_url")
-        or frame.get("thumb_1024_url")
-        or ""
-    )
+    return frame.get("thumb_original_url") or ""
 
 
 def _fetch_image_url(image_id: str) -> str | None:
-    """Fetch the best available downloadable image URL for a single image ID."""
+    """Fetch the original downloadable image URL for a single image ID."""
     url = IMAGE_DETAIL_ENDPOINT.format(image_id=image_id)
     params = {"fields": "thumb_original_url,thumb_2048_url,thumb_1024_url", **_auth_params()}
     try:
         resp = _get_with_retry(url, params)
-        return resp.get("thumb_original_url") or resp.get("thumb_2048_url") or resp.get("thumb_1024_url")
+        return resp.get("thumb_original_url")
     except Exception as exc:
         logger.warning("Could not fetch image URL for %s: %s", image_id, exc)
         return None
 
 
 def _get_with_retry(url: str, params: dict, max_retries: int = 3) -> dict:
-    """GET with simple retry on 429/5xx."""
+    """GET with simple retry on timeouts and transient 429/5xx failures."""
     for attempt in range(1, max_retries + 1):
-        resp = requests.get(url, params=params, timeout=30)
+        try:
+            resp = requests.get(url, params=params, timeout=60)
+        except requests.exceptions.RequestException as exc:
+            logger.warning("Request error on attempt %d, waiting %ds: %s", attempt, RETRY_WAIT, exc)
+            time.sleep(RETRY_WAIT * attempt)
+            continue
         if resp.status_code == 429 or resp.status_code >= 500:
             logger.warning("HTTP %d on attempt %d, waiting %ds…", resp.status_code, attempt, RETRY_WAIT)
             time.sleep(RETRY_WAIT * attempt)

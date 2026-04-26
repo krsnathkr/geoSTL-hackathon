@@ -6,9 +6,11 @@ import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from ingest.mapillary import (
     _iter_bbox_tiles,
+    _get_with_retry,
     _group_by_sequence,
     _parse_frame,
     download_frames,
@@ -201,3 +203,39 @@ def test_download_frames_prefers_original_and_can_overwrite(mock_download):
             "https://cdn.mapillary.com/img-001-original.jpg",
             out_path,
         )
+
+
+@patch("ingest.mapillary._download_file")
+@patch("ingest.mapillary._fetch_image_url")
+def test_download_frames_skips_when_original_unavailable(mock_fetch_image_url, mock_download):
+    frame = dict(_parse_frame(RAW_FRAME))
+    frame["thumb_original_url"] = ""
+    frame["thumb_2048_url"] = "https://cdn.mapillary.com/img-001-2048.jpg"
+    frame["thumb_1024_url"] = "https://cdn.mapillary.com/img-001-1024.jpg"
+    sequences = [{"sequence_id": "seq-abc", "frames": [frame]}]
+    mock_fetch_image_url.return_value = None
+
+    with tempfile.TemporaryDirectory() as tmp:
+        download_frames(sequences, output_dir=tmp, overwrite_existing=True)
+
+    mock_fetch_image_url.assert_called_once_with("img-001")
+    mock_download.assert_not_called()
+
+
+@patch("ingest.mapillary.time.sleep")
+@patch("ingest.mapillary.requests.get")
+def test_get_with_retry_recovers_from_timeout(mock_get, mock_sleep):
+    success = MagicMock(status_code=200)
+    success.json.return_value = {"data": [RAW_FRAME], "paging": {}}
+    success.raise_for_status.return_value = None
+
+    mock_get.side_effect = [
+        requests.exceptions.ReadTimeout("timed out"),
+        success,
+    ]
+
+    result = _get_with_retry("https://graph.mapillary.com/images", {"bbox": "1,2,3,4"})
+
+    assert result["data"][0]["id"] == "img-001"
+    assert mock_get.call_count == 2
+    mock_sleep.assert_called_once()

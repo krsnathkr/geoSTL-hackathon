@@ -3,11 +3,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None or value == "":
+        return default
+    return float(value)
+
+
 BBOX = {
-    "min_lon": -105.285,
-    "min_lat": 39.990,
-    "max_lon": -105.245,
-    "max_lat": 40.020,
+    # Approximate Boulder citywide bounding box. Override via env when needed.
+    "min_lon": _env_float("BBOX_MIN_LON", -105.3010),
+    "min_lat": _env_float("BBOX_MIN_LAT", 39.9530),
+    "max_lon": _env_float("BBOX_MAX_LON", -105.1785),
+    "max_lat": _env_float("BBOX_MAX_LAT", 40.0946),
 }
 
 AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
@@ -42,6 +50,8 @@ MAPILLARY_ACCESS_TOKEN = os.getenv("MAPILLARY_ACCESS_TOKEN", "")
 MAPILLARY_API_BASE = "https://graph.mapillary.com"
 
 FRAME_SAMPLE_INTERVAL = 5   # seconds between sampled frames
+CLIP_FRAME_DURATION_SEC = _env_float("CLIP_FRAME_DURATION_SEC", 0.15)
+CLIP_OUTPUT_FPS = int(os.getenv("CLIP_OUTPUT_FPS", "30"))
 POI_MATCH_RADIUS_M = 50     # meters for Overture proximity match
 UTM_CRS = "EPSG:32613"      # UTM zone 13N for Colorado
 WGS84_CRS = "EPSG:4326"

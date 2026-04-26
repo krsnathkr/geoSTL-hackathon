@@ -66,39 +66,39 @@ def test_geodesic_distance_known():
 
 def test_detection_metrics_type_breakdown():
     rows = [
-        {"obs_id": "a", "detection_type": "stale", "confidence": 0.8, "distance_m": 10.0, "lat": 37.77, "lon": -122.42},
-        {"obs_id": "b", "detection_type": "missing", "confidence": 0.7, "distance_m": None, "lat": 37.78, "lon": -122.43},
-        {"obs_id": "c", "detection_type": "validated", "confidence": 0.9, "distance_m": 5.0, "lat": 37.79, "lon": -122.44},
+        {"obs_id": "a", "detection_type": "pothole", "confidence": 0.8, "match_distance_m": 10.0, "lat": 37.77, "lon": -122.42},
+        {"obs_id": "b", "detection_type": "sidewalk_missing", "confidence": 0.7, "match_distance_m": None, "lat": 37.78, "lon": -122.43},
+        {"obs_id": "c", "detection_type": "sidewalk_present", "confidence": 0.9, "match_distance_m": 5.0, "lat": 37.79, "lon": -122.44},
     ]
     gdf = _make_detections(rows)
     metrics = compute_detection_metrics(gdf)
-    assert "stale" in metrics
-    assert "missing" in metrics
-    assert "miscategorized" in metrics
+    assert "pothole" in metrics
+    assert "sidewalk_missing" in metrics
+    assert "sidewalk_present" in metrics
     assert "rmse_m" in metrics
 
 
 def test_detection_metrics_with_ground_truth():
     rows = [
-        {"obs_id": "a", "detection_type": "stale", "confidence": 0.8, "distance_m": 10.0, "lat": 37.77, "lon": -122.42},
-        {"obs_id": "b", "detection_type": "stale", "confidence": 0.3, "distance_m": 45.0, "lat": 37.78, "lon": -122.43},
+        {"obs_id": "a", "detection_type": "construction", "confidence": 0.8, "match_distance_m": 10.0, "lat": 37.77, "lon": -122.42},
+        {"obs_id": "b", "detection_type": "construction", "confidence": 0.3, "match_distance_m": 45.0, "lat": 37.78, "lon": -122.43},
     ]
     gdf = _make_detections(rows)
-    gt = [{"obs_id": "a", "true_type": "stale"}]
+    gt = [{"obs_id": "a", "true_type": "construction"}]
     metrics = compute_detection_metrics(gdf, ground_truth=gt)
-    assert metrics["stale"]["tp"] == 1
-    assert metrics["stale"]["fp"] == 1
+    assert metrics["construction"]["tp"] == 1
+    assert metrics["construction"]["fp"] == 1
 
 
 # ── temporal advantage ────────────────────────────────────────────────────────
 
 def test_temporal_advantage():
     video_rows = [
-        {"obs_id": "a", "detection_type": "stale", "confidence": 0.8, "distance_m": 10.0, "lat": 37.77, "lon": -122.42},
-        {"obs_id": "b", "detection_type": "missing", "confidence": 0.7, "distance_m": None, "lat": 37.78, "lon": -122.43},
+        {"obs_id": "a", "detection_type": "construction", "confidence": 0.8, "match_distance_m": 10.0, "lat": 37.77, "lon": -122.42},
+        {"obs_id": "b", "detection_type": "pothole", "confidence": 0.7, "match_distance_m": None, "lat": 37.78, "lon": -122.43},
     ]
     base_rows = [
-        {"obs_id": "a", "detection_type": "validated", "confidence": 0.6, "distance_m": 10.0, "lat": 37.77, "lon": -122.42},
+        {"obs_id": "a", "detection_type": "sidewalk_present", "confidence": 0.6, "match_distance_m": 10.0, "lat": 37.77, "lon": -122.42},
     ]
     video = _make_detections(video_rows)
     baseline = _make_detections(base_rows)
@@ -112,15 +112,15 @@ def test_temporal_advantage():
 
 def test_compute_and_save_writes_json():
     rows = [
-        {"obs_id": "a", "detection_type": "stale", "confidence": 0.8, "distance_m": 10.0, "lat": 37.77, "lon": -122.42},
-        {"obs_id": "b", "detection_type": "missing", "confidence": 0.6, "distance_m": None, "lat": 37.78, "lon": -122.43},
+        {"obs_id": "a", "detection_type": "construction", "confidence": 0.8, "match_distance_m": 10.0, "lat": 37.77, "lon": -122.42},
+        {"obs_id": "b", "detection_type": "sidewalk_missing", "confidence": 0.6, "match_distance_m": None, "lat": 37.78, "lon": -122.43},
     ]
     gdf = _make_detections(rows)
 
     with tempfile.TemporaryDirectory() as tmp:
         metrics = compute_and_save(gdf, output_dir=tmp)
         assert os.path.exists(os.path.join(tmp, "metrics.json"))
-        assert "stale" in metrics
+        assert "construction" in metrics
         assert "total_detections" in metrics
         with open(os.path.join(tmp, "metrics.json")) as f:
             loaded = json.load(f)

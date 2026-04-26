@@ -2,10 +2,10 @@
 Compute evaluation metrics for the detection pipeline.
 
 Metrics:
-  - Precision, Recall, F1 per detection type
-  - Geospatial RMSE (metres) between observation GPS and matched Overture GPS
+  - Precision, Recall, F1 proxy per finding type
+  - Match-distance RMSE (metres) when transport segment links exist
   - Video-sequence vs. single-frame baseline comparison
-  - False positive rate per km²
+  - Finding density per km²
 
 Output: data/output/metrics.json
 """
@@ -27,9 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Geodesic calculator (WGS84)
 _GEOD = Geod(ellps="WGS84")
-
-DETECTION_TYPES = ["missing", "stale", "miscategorized"]
-
+NON_ISSUE_TYPES = {"validated", "sidewalk_present"}
 
 # ── Geospatial distance ───────────────────────────────────────────────────────
 
@@ -76,7 +74,8 @@ def compute_detection_metrics(
     """
     results: dict = {}
 
-    for det_type in DETECTION_TYPES:
+    detection_types = sorted(detections["detection_type"].dropna().unique().tolist())
+    for det_type in detection_types:
         subset = detections[detections["detection_type"] == det_type]
         if ground_truth:
             gt_ids = {r["obs_id"] for r in ground_truth if r["true_type"] == det_type}
@@ -88,15 +87,15 @@ def compute_detection_metrics(
             tp = int((subset["confidence"] >= 0.6).sum())
             fp = int((subset["confidence"] < 0.6).sum())
             # FN estimate: detections we likely missed (validated rows with low conf)
-            validated = detections[detections["detection_type"] == "validated"]
-            fn = int((validated["confidence"] < 0.4).sum())
+            fn = 0
 
         results[det_type] = precision_recall_f1(tp, fp, fn)
 
     # Overall geospatial RMSE: distance between observation GPS and matched Overture GPS
     # We only compute this for rows that have a GERS match (distance_m not null)
-    matched = detections[detections["distance_m"].notna() & (detections["detection_type"] != "validated")]
-    errors = matched["distance_m"].dropna().tolist()
+    distance_column = "match_distance_m" if "match_distance_m" in detections.columns else "distance_m"
+    matched = detections[detections[distance_column].notna()] if distance_column in detections.columns else detections.iloc[0:0]
+    errors = matched[distance_column].dropna().tolist() if distance_column in matched.columns else []
     results["rmse_m"] = rmse(errors)
     results["rmse_matched_count"] = len(errors)
 
@@ -132,8 +131,8 @@ def compute_temporal_advantage(
     baseline_detections should be produced from only the first frame of each sequence.
     Returns improvement ratios and delta counts.
     """
-    video_disc = video_detections[video_detections["detection_type"] != "validated"]
-    base_disc = baseline_detections[baseline_detections["detection_type"] != "validated"]
+    video_disc = video_detections[~video_detections["detection_type"].isin(NON_ISSUE_TYPES)]
+    base_disc = baseline_detections[~baseline_detections["detection_type"].isin(NON_ISSUE_TYPES)]
 
     result: dict = {
         "video_discrepancies": len(video_disc),
@@ -142,7 +141,8 @@ def compute_temporal_advantage(
     }
 
     # Per-type
-    for det_type in DETECTION_TYPES:
+    det_types = sorted(set(video_disc["detection_type"].dropna()) | set(base_disc["detection_type"].dropna()))
+    for det_type in det_types:
         v_count = int((video_disc["detection_type"] == det_type).sum())
         b_count = int((base_disc["detection_type"] == det_type).sum())
         result[f"video_{det_type}"] = v_count
@@ -188,9 +188,7 @@ def compute_and_save(
     metrics = compute_detection_metrics(detections, ground_truth=ground_truth)
 
     metrics["total_detections"] = len(detections)
-    metrics["discrepancy_count"] = int(
-        (detections["detection_type"] != "validated").sum()
-    )
+    metrics["discrepancy_count"] = int((~detections["detection_type"].isin(NON_ISSUE_TYPES)).sum())
 
     if not detections.empty:
         metrics["fp_per_km2"] = false_positive_rate_per_km2(detections)

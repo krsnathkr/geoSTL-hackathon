@@ -41,13 +41,13 @@ def test_collect_local_frames_filters_missing_files(tmp_path):
 @patch("run_pipeline.compute_and_save")
 @patch("run_pipeline.export_all")
 @patch("run_pipeline.cross_reference")
-@patch("run_pipeline.load_places")
+@patch("run_pipeline.load_transportation")
 @patch("run_pipeline.load_json_artifact")
 @patch("run_pipeline.load_descriptions")
 def test_run_pipeline_analyze_only(
     mock_load_descriptions,
     mock_load_json_artifact,
-    mock_load_places,
+    mock_load_transportation,
     mock_cross_reference,
     mock_export_all,
     mock_compute_and_save,
@@ -62,19 +62,19 @@ def test_run_pipeline_analyze_only(
 
     mock_load_descriptions.return_value = [{"sequence_id": "seq-1", "lat": 37.77, "lon": -122.42}]
     mock_load_json_artifact.return_value = [{"sequence_id": "seq-1", "lat": 37.77, "lon": -122.42}]
-    mock_load_places.return_value = gpd.GeoDataFrame(
-        [{"id": "gers-001", "name": "Blue Bottle", "category": "cafe", "geometry": Point(-122.42, 37.77)}],
+    mock_load_transportation.return_value = gpd.GeoDataFrame(
+        [{"id": "segment-001", "name": "Pearl Street", "class": "residential", "geometry": Point(-122.42, 37.77)}],
         geometry="geometry",
         crs=WGS84_CRS,
     )
     mock_cross_reference.side_effect = [
         gpd.GeoDataFrame(
-            [{"obs_id": "seq-1", "detection_type": "stale", "lat": 37.77, "lon": -122.42}],
+            [{"obs_id": "seq-1", "detection_type": "pothole", "lat": 37.77, "lon": -122.42}],
             geometry=[Point(-122.42, 37.77)],
             crs=WGS84_CRS,
         ),
         gpd.GeoDataFrame(
-            [{"obs_id": "seq-1", "detection_type": "validated", "lat": 37.77, "lon": -122.42}],
+            [{"obs_id": "seq-1", "detection_type": "sidewalk_present", "lat": 37.77, "lon": -122.42}],
             geometry=[Point(-122.42, 37.77)],
             crs=WGS84_CRS,
         ),
@@ -84,7 +84,7 @@ def test_run_pipeline_analyze_only(
         "geoparquet": str(output_dir / "detections.geoparquet"),
     }
     mock_compute_and_save.return_value = {
-        "type_counts": {"stale": 1},
+        "type_counts": {"pothole": 1},
         "temporal_advantage": {"delta": 1},
     }
 
@@ -99,7 +99,7 @@ def test_run_pipeline_analyze_only(
     assert result["status"] == "ok"
     assert result["detections"] == 1
     assert result["baseline_detections"] == 1
-    assert result["type_counts"] == {"stale": 1}
+    assert result["type_counts"] == {"pothole": 1}
     assert result["has_temporal_advantage"] is True
     assert mock_compute_and_save.call_args.kwargs["baseline_detections"] is not None
 

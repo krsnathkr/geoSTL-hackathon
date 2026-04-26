@@ -1,5 +1,5 @@
 """
-Export detections to GeoJSON and GeoParquet for submission and the web UI.
+Export sidewalk inventory findings to GeoJSON and GeoParquet for submission and the web UI.
 
 Outputs:
   data/output/detections.geojson      — GeoJSON FeatureCollection
@@ -18,7 +18,8 @@ from config.settings import DATA_OUTPUT, OVERTURE_RELEASE, WGS84_CRS
 
 logger = logging.getLogger(__name__)
 
-# Required properties per GeoJSON feature (Overture contribution format)
+NON_ISSUE_TYPES = {"validated", "sidewalk_present"}
+
 REQUIRED_PROPERTIES = [
     "obs_id",
     "detection_type",
@@ -27,10 +28,16 @@ REQUIRED_PROPERTIES = [
     "obs_category",
     "obs_condition",
     "obs_description",
-    "gers_id",
-    "overture_name",
-    "overture_category",
-    "distance_m",
+    "sidewalk_presence",
+    "sidewalk_width_m",
+    "curb_ramp_status",
+    "obstructions",
+    "hazards",
+    "crossing_features",
+    "transport_id",
+    "transport_name",
+    "transport_class",
+    "match_distance_m",
     "clip_s3_uri",
     "frame_ids",
     "lat",
@@ -45,6 +52,10 @@ def _ensure_required_columns(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return gdf
 
 
+def _exclude_non_issues(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    return gdf[~gdf["detection_type"].isin(NON_ISSUE_TYPES)]
+
+
 def to_geojson(
     detections: gpd.GeoDataFrame,
     output_dir: str = DATA_OUTPUT,
@@ -54,7 +65,6 @@ def to_geojson(
     """
     Write detections as a GeoJSON FeatureCollection.
 
-    exclude_validated: omit 'validated' rows (no discrepancy) to keep file small.
     Returns the path to the written file.
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -63,7 +73,7 @@ def to_geojson(
     gdf = detections.copy()
     gdf = _ensure_required_columns(gdf)
     if exclude_validated:
-        gdf = gdf[gdf["detection_type"] != "validated"]
+        gdf = _exclude_non_issues(gdf)
 
     gdf = gdf.to_crs(WGS84_CRS)
 
@@ -73,7 +83,7 @@ def to_geojson(
         "metadata": {
             "overture_release": OVERTURE_RELEASE,
             "crs": "EPSG:4326",
-            "detection_types": ["missing", "stale", "miscategorized"],
+            "detection_types": sorted(gdf["detection_type"].dropna().unique().tolist()),
         },
         "features": [],
     }
@@ -104,7 +114,7 @@ def to_geoparquet(
     exclude_validated: bool = False,
 ) -> str:
     """
-    Write detections as GeoParquet conforming to Overture's schema extension.
+    Write detections as GeoParquet using the sidewalk inventory schema.
 
     Returns the path to the written file.
     """
@@ -114,37 +124,50 @@ def to_geoparquet(
     gdf = detections.copy()
     gdf = _ensure_required_columns(gdf)
     if exclude_validated:
-        gdf = gdf[gdf["detection_type"] != "validated"]
+        gdf = _exclude_non_issues(gdf)
 
     gdf = gdf.to_crs(WGS84_CRS)
 
-    # Rename to Overture-compatible column names
     rename_map = {
         "obs_id": "source_id",
-        "detection_type": "discrepancy_type",
         "obs_name": "observed_name",
         "obs_category": "observed_category",
         "obs_condition": "observed_condition",
-        "gers_id": "overture_id",
-        "distance_m": "match_distance_m",
     }
     gdf = gdf.rename(columns=rename_map)
 
-    # Add Overture metadata columns
     gdf["overture_release"] = OVERTURE_RELEASE
     gdf["schema_version"] = "1.0"
 
-    # Ensure frame_ids is a string (list stored as JSON)
-    if "frame_ids" in gdf.columns:
-        gdf["frame_ids"] = gdf["frame_ids"].astype(str)
+    for list_like in ["frame_ids", "obstructions", "hazards", "crossing_features"]:
+        if list_like in gdf.columns:
+            gdf[list_like] = gdf[list_like].astype(str)
 
-    # Drop columns that break parquet schema
     drop_cols = [c for c in gdf.columns if c not in [
-        "source_id", "discrepancy_type", "confidence", "observed_name",
-        "observed_category", "observed_condition", "overture_id",
-        "overture_name", "overture_category", "match_distance_m",
-        "clip_s3_uri", "frame_ids", "lat", "lon",
-        "overture_release", "schema_version", "geometry",
+        "source_id",
+        "detection_type",
+        "confidence",
+        "observed_name",
+        "observed_category",
+        "observed_condition",
+        "obs_description",
+        "sidewalk_presence",
+        "sidewalk_width_m",
+        "curb_ramp_status",
+        "obstructions",
+        "hazards",
+        "crossing_features",
+        "transport_id",
+        "transport_name",
+        "transport_class",
+        "match_distance_m",
+        "clip_s3_uri",
+        "frame_ids",
+        "lat",
+        "lon",
+        "overture_release",
+        "schema_version",
+        "geometry",
     ]]
     gdf = gdf.drop(columns=drop_cols, errors="ignore")
 

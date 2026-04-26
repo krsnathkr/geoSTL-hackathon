@@ -4,6 +4,8 @@ This is a hackathon organzied by GeoSTL and TwelveLabs.
 
 We have to use twelve-labs API to analyze the video data and extract the geospatial information.
 
+Current focus: `02 - Sidewalk Infrastructure Inventory`.
+
 I will have to get the data from:
 
 1. overture - https://docs.overturemaps.org/getting-data/
@@ -35,6 +37,7 @@ What is working:
 - Mapillary sequence ingest
 - Mapillary frame redownload with higher-resolution image preference
 - Bedrock embed and Pegasus describe stages
+- Pegasus prompt tuned for sidewalk presence, width, curb ramps, obstructions, and crossing features
 - `analyze` exports for detections, baseline detections, and metrics
 - FastAPI dashboard and data routes
 
@@ -42,7 +45,7 @@ What is still limited:
 
 - OpenSearch auth still returns `401`, so vector indexing is skipped
 - Overture transportation ingest is still slow for iterative debugging
-- detection quality is currently limited more by sparse frame sampling than by outright pipeline failure
+- the `analyze` stage is still POI-oriented and does not yet produce a transportation-schema sidewalk inventory output
 
 Best current verification run:
 
