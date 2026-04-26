@@ -106,7 +106,11 @@ def descriptions_to_gdf(descriptions: list[dict]) -> gpd.GeoDataFrame:
                 "description": d.get("description", ""),
                 "sidewalk_presence": d.get("sidewalk_presence", "unclear"),
                 "sidewalk_width_m": d.get("sidewalk_width_m"),
+                "width_category": d.get("width_category", "unknown"),
                 "curb_ramp_status": d.get("curb_ramp_status", "unclear"),
+                "surface_material": d.get("surface_material", "unknown"),
+                "surface_defects": _string_list(d.get("surface_defects")),
+                "lighting": d.get("lighting", "unknown"),
                 "obstructions": _string_list(d.get("obstructions")),
                 "hazards": _string_list(d.get("hazards")),
                 "crossing_features": _string_list(d.get("crossing_features")),
@@ -144,29 +148,50 @@ def classify_observation(row: pd.Series) -> list[str]:
     presence = (row.get("sidewalk_presence") or "unclear").lower()
     condition = (row.get("condition") or "unknown").lower()
     curb_ramp_status = (row.get("curb_ramp_status") or "unclear").lower()
+    width_category = (row.get("width_category") or "unknown").lower()
+    lighting = (row.get("lighting") or "unknown").lower()
+    surface_material = (row.get("surface_material") or "unknown").lower()
     obstructions = [_normalize_label(v) for v in row.get("obstructions") or []]
     hazards = [_normalize_label(v) for v in row.get("hazards") or []]
+    surface_defects = [_normalize_label(v) for v in row.get("surface_defects") or []]
+    crossing_features = [_normalize_label(v) for v in row.get("crossing_features") or []]
 
+    # Sidewalk presence — skip "unclear" to avoid flooding the map with low-signal points
     if presence == "absent":
         findings.append("sidewalk_missing")
-    elif presence == "unclear":
-        findings.append("sidewalk_unclear")
-    else:
+    elif presence == "present":
         findings.append("sidewalk_present")
+    # presence == "unclear" → no finding emitted
 
+    # Curb ramp issues
     if curb_ramp_status == "absent":
         findings.append("curb_ramp_missing")
+    elif curb_ramp_status == "present_noncompliant":
+        findings.append("ada_noncompliant_ramp")
 
+    # Walkway condition
     if condition == "poor":
         findings.append("poor_condition")
     elif condition == "blocked":
         findings.append("blocked_path")
     elif condition == "under_construction":
         findings.append("construction")
+    elif condition == "fair":
+        findings.append("fair_condition")
 
+    # Narrow sidewalk (ADA minimum is 1.2 m / 4 ft)
+    if presence == "present" and width_category == "narrow":
+        findings.append("narrow_sidewalk")
+
+    # Obstructions blocking the path
     if obstructions:
         findings.append("obstruction")
 
+    # Surface defects (cracking, heaving, vegetation encroachment, etc.)
+    if surface_defects:
+        findings.append("surface_defect")
+
+    # Specific hazards
     if any("pothole" in hazard for hazard in hazards):
         findings.append("pothole")
     if any(
@@ -178,6 +203,18 @@ def classify_observation(row: pd.Series) -> list[str]:
         findings.append("construction")
     if any(hazard in {"debris", "standing_water", "ice", "flooding"} for hazard in hazards):
         findings.append("hazard")
+
+    # Unpaved / informal surface material
+    if presence == "present" and surface_material in {"gravel", "dirt"}:
+        findings.append("unpaved_surface")
+
+    # Inadequate lighting
+    if lighting == "inadequate":
+        findings.append("poor_lighting")
+
+    # Intersection visible (curb ramp assessed) but no pedestrian crossing markings detected
+    if curb_ramp_status in {"absent", "present_noncompliant"} and not crossing_features:
+        findings.append("missing_crossing_features")
 
     deduped: list[str] = []
     for finding in findings:

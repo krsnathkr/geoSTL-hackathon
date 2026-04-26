@@ -22,6 +22,8 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 }).addTo(map);
 
 let detections = [];
+let _followupPollTimer = null;
+let _currentDetectionId = null;
 
 // ── Tabs ──────────────────────────────────────────────
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -208,6 +210,206 @@ function showDetail(feature) {
   } else {
     clipNode.textContent = "No clip available";
   }
+
+  // ── Follow-up block ──────────────────────────────────
+  // Use detection_id if present; fall back to obs_id so the button always works
+  // even with geojson generated before detection_id was added to export.py.
+  _currentDetectionId = p.detection_id || p.obs_id || null;
+  _resetFollowupUI();
+  _loadExistingFollowup(_currentDetectionId);
+  _wireUploadButton(_currentDetectionId);
+}
+
+function _resetFollowupUI() {
+  if (_followupPollTimer) {
+    clearInterval(_followupPollTimer);
+    _followupPollTimer = null;
+  }
+  document.getElementById("followup-existing").classList.add("hidden");
+  document.getElementById("followup-existing").innerHTML = "";
+  document.getElementById("followup-upload-area").style.display = "";
+  document.getElementById("followup-status").classList.add("hidden");
+  document.getElementById("followup-status").textContent = "";
+  document.getElementById("followup-video").style.display = "none";
+  document.getElementById("followup-video").src = "";
+  document.getElementById("followup-results").classList.add("hidden");
+  document.getElementById("followup-results").innerHTML = "";
+  document.getElementById("followup-badge").classList.add("hidden");
+  document.getElementById("followup-file-input").value = "";
+}
+
+function _loadExistingFollowup(detectionId) {
+  if (!detectionId) return;
+  fetch(`/api/events/${encodeURIComponent(detectionId)}/followup`)
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.status === "done" && data.result) {
+        _renderFollowupResult(data.result);
+      }
+    })
+    .catch(() => {});
+}
+
+function _wireUploadButton(detectionId) {
+  if (!detectionId) return;
+  const btn = document.getElementById("followup-upload-btn");
+  const input = document.getElementById("followup-file-input");
+
+  const newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, btn);
+  const newInput = input.cloneNode(true);
+  input.parentNode.replaceChild(newInput, input);
+
+  newBtn.addEventListener("click", () => newInput.click());
+  newInput.addEventListener("change", () => {
+    const file = newInput.files[0];
+    if (!file || detectionId !== _currentDetectionId) return;
+    _startFollowupUpload(detectionId, file);
+  });
+}
+
+function _startFollowupUpload(detectionId, file) {
+  const statusEl = document.getElementById("followup-status");
+  statusEl.textContent = "Uploading…";
+  statusEl.classList.remove("hidden");
+  document.getElementById("followup-upload-area").style.display = "none";
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  fetch(`/api/events/${encodeURIComponent(detectionId)}/followup-video`, {
+    method: "POST",
+    body: formData,
+  })
+    .then((r) => r.json())
+    .then(({ job_id }) => {
+      _pollFollowupJob(detectionId, job_id);
+    })
+    .catch((err) => {
+      statusEl.textContent = `Upload failed: ${err.message}`;
+      document.getElementById("followup-upload-area").style.display = "";
+    });
+}
+
+const STATUS_LABELS = {
+  queued: "Queued…",
+  uploading: "Uploading to S3…",
+  embedding: "Running Marengo (embedding)…",
+  describing: "Running Pegasus (describing)…",
+  done: "Done",
+  error: "Error",
+};
+
+function _pollFollowupJob(detectionId, jobId) {
+  const statusEl = document.getElementById("followup-status");
+
+  _followupPollTimer = setInterval(() => {
+    if (detectionId !== _currentDetectionId) {
+      clearInterval(_followupPollTimer);
+      return;
+    }
+    fetch(`/api/events/${encodeURIComponent(detectionId)}/followup?job_id=${encodeURIComponent(jobId)}`)
+      .then((r) => r.json())
+      .then((job) => {
+        statusEl.textContent = STATUS_LABELS[job.status] || job.status;
+        if (job.status === "done") {
+          clearInterval(_followupPollTimer);
+          statusEl.classList.add("hidden");
+          _renderFollowupResult(job.result);
+        } else if (job.status === "error") {
+          clearInterval(_followupPollTimer);
+          statusEl.textContent = `Error: ${job.error || "unknown"}`;
+          document.getElementById("followup-upload-area").style.display = "";
+        }
+      })
+      .catch(() => {});
+  }, 2000);
+}
+
+function _renderFollowupResult(result) {
+  document.getElementById("followup-badge").classList.remove("hidden");
+  document.getElementById("followup-upload-area").style.display = "none";
+
+  const pegasus = result.pegasus || {};
+
+  const lists = (arr) =>
+    Array.isArray(arr) && arr.length ? arr.join(", ") : "none";
+
+  const resultsEl = document.getElementById("followup-results");
+  resultsEl.innerHTML = `
+    <div class="followup-grid">
+      <div class="detail-row"><span class="detail-label">Condition</span><span class="detail-value">${pegasus.condition || "—"}</span></div>
+      <div class="detail-row"><span class="detail-label">Sidewalk</span><span class="detail-value">${pegasus.sidewalk_presence || "—"}</span></div>
+      <div class="detail-row"><span class="detail-label">Width (m)</span><span class="detail-value">${pegasus.sidewalk_width_m ?? "n/a"}</span></div>
+      <div class="detail-row"><span class="detail-label">Curb Ramp</span><span class="detail-value">${pegasus.curb_ramp_status || "—"}</span></div>
+      <div class="detail-row"><span class="detail-label">Obstructions</span><span class="detail-value">${lists(pegasus.obstructions)}</span></div>
+      <div class="detail-row"><span class="detail-label">Hazards</span><span class="detail-value">${lists(pegasus.hazards)}</span></div>
+    </div>
+    ${pegasus.description ? `<p class="followup-desc">${pegasus.description}</p>` : ""}
+    <div class="followup-actions">
+      <button id="followup-similar-btn" class="followup-btn followup-btn-secondary">Find similar locations</button>
+      <button id="followup-delete-btn" class="followup-btn followup-btn-danger">Delete &amp; re-upload</button>
+    </div>
+    <div id="followup-similar-results" class="hidden"></div>
+  `;
+  resultsEl.classList.remove("hidden");
+
+  if (result.clip_s3_uri) {
+    fetch(`/api/clip-url?uri=${encodeURIComponent(result.clip_s3_uri)}`)
+      .then((r) => r.json())
+      .then(({ url }) => {
+        const vid = document.getElementById("followup-video");
+        vid.src = url;
+        vid.style.display = "block";
+      })
+      .catch(() => {});
+  }
+
+  document.getElementById("followup-similar-btn").addEventListener("click", () => {
+    _loadSimilar(_currentDetectionId);
+  });
+
+  document.getElementById("followup-delete-btn").addEventListener("click", () => {
+    const detectionId = _currentDetectionId;
+    if (!detectionId) return;
+    fetch(`/api/events/${encodeURIComponent(detectionId)}/followup`, { method: "DELETE" })
+      .then((r) => r.json())
+      .then(() => {
+        _resetFollowupUI();
+        _wireUploadButton(detectionId);
+      })
+      .catch((err) => console.error("Delete failed:", err));
+  });
+}
+
+function _loadSimilar(detectionId) {
+  const btn = document.getElementById("followup-similar-btn");
+  if (btn) btn.disabled = true;
+  const container = document.getElementById("followup-similar-results");
+  container.innerHTML = "Searching…";
+  container.classList.remove("hidden");
+
+  fetch(`/api/events/${encodeURIComponent(detectionId)}/similar?k=5`)
+    .then((r) => r.json())
+    .then(({ hits }) => {
+      if (!hits || !hits.length) {
+        container.innerHTML = "<span class='muted'>No similar locations found.</span>";
+        return;
+      }
+      container.innerHTML = hits
+        .map(
+          (h) =>
+            `<div class="similar-hit">
+              <span class="detail-label">${h.sequence_id || "—"}</span>
+              <span class="muted">${h.lat != null ? `${h.lat.toFixed(5)}, ${h.lon != null ? h.lon.toFixed(5) : ""}` : ""}</span>
+              <span class="similar-score">score ${(h.score || 0).toFixed(3)}</span>
+            </div>`
+        )
+        .join("");
+    })
+    .catch((err) => {
+      container.innerHTML = `<span class='muted'>Error: ${err.message}</span>`;
+    });
 }
 
 // ── Metrics ──────────────────────────────────────────

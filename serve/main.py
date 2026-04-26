@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config.settings import DATA_OUTPUT, DATA_RAW
 from serve.routes.data import build_router
+from serve.routes.followup import build_followup_router
 
 
 def create_app(
@@ -21,6 +22,7 @@ def create_app(
         build_router(data_raw_dir=data_raw_dir, data_output_dir=data_output_dir),
         prefix="/api",
     )
+    app.include_router(build_followup_router(), prefix="/api")
 
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 

@@ -6,6 +6,7 @@ Outputs:
   data/output/detections.geoparquet   — GeoParquet (Overture-compatible schema)
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -18,9 +19,10 @@ from config.settings import DATA_OUTPUT, OVERTURE_RELEASE, WGS84_CRS
 
 logger = logging.getLogger(__name__)
 
-NON_ISSUE_TYPES = {"validated", "sidewalk_present"}
+NON_ISSUE_TYPES = {"validated", "sidewalk_present", "sidewalk_unclear"}
 
 REQUIRED_PROPERTIES = [
+    "detection_id",
     "obs_id",
     "detection_type",
     "confidence",
@@ -90,6 +92,10 @@ def to_geojson(
 
     for _, row in gdf.iterrows():
         props = {col: _serialise(row.get(col)) for col in REQUIRED_PROPERTIES}
+        # Stable detection_id derived from obs_id so the frontend can reference it
+        if not props.get("detection_id"):
+            seed = str(props.get("obs_id") or "")
+            props["detection_id"] = hashlib.sha256(seed.encode()).hexdigest()[:16]
 
         feature_collection["features"].append({
             "type": "Feature",

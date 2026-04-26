@@ -32,28 +32,45 @@ from process.twelvelabs import get_bedrock_client, upload_to_s3, _s3_location
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROMPT = (
-    "You are analyzing a short street-level video for Sidewalk Infrastructure Inventory. "
-    "Focus on pedestrian infrastructure, not businesses or general scene summaries. "
+    "You are a trained sidewalk infrastructure inspector analyzing a street-level video clip. "
+    "Your task is to produce a precise Sidewalk Infrastructure Inventory record. "
+    "Focus exclusively on pedestrian infrastructure — ignore businesses, vehicles, and non-sidewalk scenery.\n\n"
     "Return valid JSON with exactly these keys:\n"
-    '{'
-    '"name": "<short sidewalk segment label such as a nearby street/intersection name if visible, otherwise sidewalk_segment>", '
-    '"category": "sidewalk", '
-    '"condition": "<one of: good, fair, poor, blocked, under_construction, unknown>", '
-    '"sidewalk_presence": "<one of: present, absent, unclear>", '
-    '"sidewalk_width_m": "<numeric width estimate in meters, or null if unclear>", '
-    '"curb_ramp_status": "<one of: present, absent, unclear, not_applicable>", '
-    '"obstructions": "<array of short obstruction labels, or [] if none visible>", '
-    '"hazards": "<array of short surface/safety hazard labels such as pothole, debris, uneven_surface, standing_water, construction_zone, or []>", '
-    '"crossing_features": "<array of short crossing/accessibility feature labels such as crosswalk, tactile_paving, pedestrian_signal, median_refuge, or []>", '
-    '"description": "<1-2 sentences describing only sidewalk evidence: presence, width, surface, curb ramps, crossings, obstructions, and condition>"}\n'
+    "{\n"
+    '  "name": "<nearby street or intersection name if legible on signage, otherwise use sidewalk_segment>",\n'
+    '  "category": "sidewalk",\n'
+    '  "sidewalk_presence": "<one of: present, absent, unclear — present means a defined pedestrian path is clearly visible>",\n'
+    '  "condition": "<one of: good, fair, poor, blocked, under_construction, unknown — rate the walkable surface quality>",\n'
+    '  "sidewalk_width_m": <REQUIRED numeric width estimate in meters as a float whenever sidewalk_presence is present — you MUST provide a best-guess estimate even with limited reference objects; use contextual cues: a person walking occupies ~0.6m, a wheelchair ~0.7m, a standard door ~0.9m, a parked car ~1.8m, a lane ~3.6m; only use null if sidewalk_presence is absent or unclear>,\n'
+    '  "width_category": "<one of: narrow, standard, wide, unknown — narrow: <1.2m (single person barely fits), standard: 1.2–1.8m (two people can pass), wide: >1.8m (ample space); derive directly from sidewalk_width_m; unknown only if sidewalk_width_m is null>",\n'
+    '  "curb_ramp_status": "<one of: present_compliant, present_noncompliant, absent, unclear, not_applicable — present_compliant means the ramp has a smooth slope and tactile dome pad; present_noncompliant means a ramp exists but is cracked, too steep, missing detectable warning surface, or otherwise ADA-deficient; not_applicable when there is no intersection or curb transition in view>",\n'
+    '  "curb_ramp_details": "<describe specific curb ramp observations: slope quality, detectable warning surface (yellow dome tiles), lip height, alignment with crosswalk — or null if not visible>",\n'
+    '  "surface_material": "<one of: concrete, asphalt, brick_paver, gravel, dirt, mixed, unknown>",\n'
+    '  "surface_defects": "<array of observed defects: cracking, heaving, spalling, potholes, missing_panels, vegetation_encroachment, uneven_joint, or []>",\n'
+    '  "obstructions": "<array of items blocking the walkway: utility_pole, street_sign, tree_roots, parked_vehicle, garbage_bin, construction_barrier, scaffolding, or []>",\n'
+    '  "hazards": "<array of safety hazards: pothole, debris, standing_water, ice, exposed_rebar, broken_glass, steep_cross_slope, narrow_passage, or []>",\n'
+    '  "crossing_features": "<array of at-grade crossing features visible: marked_crosswalk, unmarked_crosswalk, tactile_paving, pedestrian_signal, ped_push_button, median_refuge, raised_crosswalk, or []>",\n'
+    '  "lighting": "<one of: adequate, inadequate, unknown — based on visible luminaires or ambient light conditions>",\n'
+    '  "description": "<2-3 sentences of factual observations: confirm sidewalk presence, estimate width with reference objects used, describe surface and condition, note curb ramp compliance, list any safety concerns>"\n'
+    "}\n\n"
+    "Measurement guidance:\n"
+    "- narrow (<1.2m): two people cannot pass comfortably side-by-side\n"
+    "- standard (1.2–1.8m): two people can pass; typical residential sidewalk\n"
+    "- wide (>1.8m): ample space, typical commercial or boulevard sidewalk\n"
+    "- Use parked cars (~1.8m wide), lane markings (~3.6m), or door widths (~0.9m) as scale references\n\n"
+    "Curb ramp compliance guidance:\n"
+    "- Compliant: smooth slope ≤8.3%, detectable warning surface (yellow truncated dome tiles) present and intact, ≥0.9m wide, aligned with crossing direction\n"
+    "- Non-compliant: missing dome tiles, cracked/broken ramp, lip >1cm at gutter, ramp misaligned with crosswalk, slope appears steep\n"
+    "- Absent: curb with vertical drop and no ramp at an intersection\n\n"
     "Rules:\n"
-    "- Prefer concrete sidewalk evidence over broad environment description.\n"
-    "- If the sidewalk cannot be confirmed, use sidewalk_presence=unclear.\n"
-    "- Estimate width conservatively in meters only when the clip supports it; otherwise use null.\n"
-    "- Use blocked only when the walking path is materially obstructed.\n"
-    "- Use under_construction only for clear construction impacts on the pedestrian path.\n"
-    "- Do not invent storefront or POI names.\n"
-    "Respond with JSON only. No markdown or extra text."
+    "- Only report what is directly observable in the video — do not infer or guess.\n"
+    "- If sidewalk_presence is present, sidewalk_width_m MUST be a number — never null. Make your best estimate using any visible reference objects or proportions.\n"
+    "- If sidewalk_presence is absent or unclear, set width_category to unknown and sidewalk_width_m to null.\n"
+    "- Set curb_ramp_status to not_applicable if no intersection, driveway apron, or curb drop is visible.\n"
+    "- Do not invent street names, business names, or POI labels.\n"
+    "- surface_defects and obstructions must be arrays (use [] if none).\n"
+    "- sidewalk_width_m must be a number or null — never a string.\n"
+    "Respond with JSON only. No markdown fences, no commentary, no extra text."
 )
 
 
@@ -148,8 +165,8 @@ def describe_clip(
         "mediaSource": {
             "s3Location": _s3_location(s3_uri),
         },
-        "temperature": 0.2,
-        "maxOutputTokens": 512,
+        "temperature": 0.1,
+        "maxOutputTokens": 800,
     })
 
     response = client.invoke_model_with_response_stream(
@@ -196,14 +213,19 @@ def parse_description(raw_text: str) -> dict:
         data = json.loads(text)
         return {
             "name": data.get("name", ""),
-            "category": data.get("category", "other"),
-            "condition": data.get("condition", "unknown"),
+            "category": data.get("category", "sidewalk"),
             "sidewalk_presence": data.get("sidewalk_presence", "unclear"),
+            "condition": data.get("condition", "unknown"),
             "sidewalk_width_m": _coerce_float(data.get("sidewalk_width_m")),
+            "width_category": data.get("width_category", "unknown"),
             "curb_ramp_status": data.get("curb_ramp_status", "unclear"),
+            "curb_ramp_details": data.get("curb_ramp_details"),
+            "surface_material": data.get("surface_material", "unknown"),
+            "surface_defects": _coerce_list(data.get("surface_defects")),
             "obstructions": _coerce_list(data.get("obstructions")),
             "hazards": _coerce_list(data.get("hazards")),
             "crossing_features": _coerce_list(data.get("crossing_features")),
+            "lighting": data.get("lighting", "unknown"),
             "description": data.get("description", ""),
             "raw": raw_text,
         }
@@ -216,22 +238,32 @@ def parse_description(raw_text: str) -> dict:
     cond_m = re.search(r'"?condition"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
     sidewalk_presence_m = re.search(r'"?sidewalk_presence"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
     sidewalk_width_m = re.search(r'"?sidewalk_width_m"?\s*[=:]\s*("?[\d\.]+"?|null)', text, re.IGNORECASE)
+    width_cat_m = re.search(r'"?width_category"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
     curb_ramp_status_m = re.search(r'"?curb_ramp_status"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
+    curb_ramp_details_m = re.search(r'"?curb_ramp_details"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
+    surface_material_m = re.search(r'"?surface_material"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
+    surface_defects_m = re.search(r'"?surface_defects"?\s*[=:]\s*\[([^\]]*)\]', text, re.IGNORECASE)
     obstructions_m = re.search(r'"?obstructions"?\s*[=:]\s*\[([^\]]*)\]', text, re.IGNORECASE)
     hazards_m = re.search(r'"?hazards"?\s*[=:]\s*\[([^\]]*)\]', text, re.IGNORECASE)
     crossing_features_m = re.search(r'"?crossing_features"?\s*[=:]\s*\[([^\]]*)\]', text, re.IGNORECASE)
+    lighting_m = re.search(r'"?lighting"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
     desc_m = re.search(r'"?description"?\s*[=:]\s*"([^"]+)"', text, re.IGNORECASE)
 
     return {
         "name": name_m.group(1) if name_m else "",
-        "category": cat_m.group(1) if cat_m else "other",
-        "condition": cond_m.group(1) if cond_m else "unknown",
+        "category": cat_m.group(1) if cat_m else "sidewalk",
         "sidewalk_presence": sidewalk_presence_m.group(1) if sidewalk_presence_m else "unclear",
+        "condition": cond_m.group(1) if cond_m else "unknown",
         "sidewalk_width_m": _coerce_float(sidewalk_width_m.group(1).strip('"') if sidewalk_width_m else None),
+        "width_category": width_cat_m.group(1) if width_cat_m else "unknown",
         "curb_ramp_status": curb_ramp_status_m.group(1) if curb_ramp_status_m else "unclear",
+        "curb_ramp_details": curb_ramp_details_m.group(1) if curb_ramp_details_m else None,
+        "surface_material": surface_material_m.group(1) if surface_material_m else "unknown",
+        "surface_defects": _coerce_list(surface_defects_m.group(1) if surface_defects_m else None),
         "obstructions": _coerce_list(obstructions_m.group(1) if obstructions_m else None),
         "hazards": _coerce_list(hazards_m.group(1) if hazards_m else None),
         "crossing_features": _coerce_list(crossing_features_m.group(1) if crossing_features_m else None),
+        "lighting": lighting_m.group(1) if lighting_m else "unknown",
         "description": desc_m.group(1) if desc_m else "",
         "raw": raw_text,
     }
@@ -271,13 +303,18 @@ def process_sequence_clip(
             "clip_s3_uri": s3_uri,
             "name": parsed["name"],
             "category": parsed["category"],
-            "condition": parsed["condition"],
             "sidewalk_presence": parsed["sidewalk_presence"],
+            "condition": parsed["condition"],
             "sidewalk_width_m": parsed["sidewalk_width_m"],
+            "width_category": parsed["width_category"],
             "curb_ramp_status": parsed["curb_ramp_status"],
+            "curb_ramp_details": parsed["curb_ramp_details"],
+            "surface_material": parsed["surface_material"],
+            "surface_defects": parsed["surface_defects"],
             "obstructions": parsed["obstructions"],
             "hazards": parsed["hazards"],
             "crossing_features": parsed["crossing_features"],
+            "lighting": parsed["lighting"],
             "description": parsed.get("description", ""),
             "lat": centroid_lat,
             "lon": centroid_lon,

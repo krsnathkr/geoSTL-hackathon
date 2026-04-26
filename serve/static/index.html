@@ -95,6 +95,20 @@
                   <span id="detail-clip" class="detail-value muted"></span>
                   <video id="detail-video" controls style="display:none;width:100%;border-radius:6px;margin-top:6px;"></video>
                 </div>
+                <div class="followup-block">
+                  <div class="followup-block-header">
+                    <span class="detail-label">Field Follow-up</span>
+                    <span id="followup-badge" class="followup-badge hidden">AI Analyzed</span>
+                  </div>
+                  <div id="followup-existing" class="hidden"></div>
+                  <div id="followup-upload-area">
+                    <input type="file" id="followup-file-input" accept="video/*" style="display:none" />
+                    <button id="followup-upload-btn" class="followup-btn">Upload follow-up video</button>
+                  </div>
+                  <div id="followup-status" class="followup-status hidden"></div>
+                  <video id="followup-video" controls style="display:none;width:100%;border-radius:6px;margin-top:6px;"></video>
+                  <div id="followup-results" class="hidden"></div>
+                </div>
               </div>
             </div>
 

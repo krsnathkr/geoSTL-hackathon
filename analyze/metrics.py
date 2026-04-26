@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Geodesic calculator (WGS84)
 _GEOD = Geod(ellps="WGS84")
-NON_ISSUE_TYPES = {"validated", "sidewalk_present"}
+NON_ISSUE_TYPES = {"validated", "sidewalk_present", "sidewalk_unclear"}
 
 # ── Geospatial distance ───────────────────────────────────────────────────────
 
