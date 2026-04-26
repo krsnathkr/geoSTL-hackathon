@@ -134,7 +134,9 @@ The pipeline artifacts are too large for GitHub and are hosted on Google Drive. 
 | Archive | Size | What it enables |
 | --- | --- | --- |
 | [`geoSTL-data-artifacts.zip`](https://drive.google.com/file/d/1cxNSSrYIBFn4wDafd7_aJ2sW1y3J2sw0/view?usp=sharing) | ~4.1 MB | Run the dashboard, inspect all findings, re-run the `analyze` stage |
-| [`geoSTL-data-images.zip`](_REPLACE_WITH_IMAGES_LINK_) | ~22 GB | Re-run the `describe` stage (Pegasus video processing) from the original frames |
+| `geoSTL-data-images.zip` | ~23 GB | Re-run the `describe` stage (Pegasus video processing) from the original frames |
+
+> **Note on the full image archive:** The raw Mapillary frame dataset is approximately 23 GB. Uploading it to a file host within the hackathon window was not feasible — a full upload would have taken over 2 hours on the available connection. The images are not included in a hosted archive. If you need to work with the raw frames, use **Option C** below to regenerate them directly from the Mapillary API in 20–40 minutes. The pipeline is fully reproducible from that starting point.
 
 ---
 
