@@ -144,12 +144,14 @@ function queueTabPlotResize(tabName) {
   }
 
   const resizePlots = () => {
-    tab.querySelectorAll(".js-plotly-plot").forEach((plot) => Plotly.Plots.resize(plot));
+    tab.querySelectorAll(".js-plotly-plot").forEach((plot) => {
+      Plotly.relayout(plot, { autosize: true });
+    });
   };
 
   requestAnimationFrame(() => {
     resizePlots();
-    window.setTimeout(resizePlots, 60);
+    window.setTimeout(resizePlots, 150);
   });
 }
 
@@ -262,7 +264,6 @@ async function loadData() {
   renderStatus(detectionCollection, metrics, sequenceCollection, comparison);
   renderSequences(sequenceCollection.features || []);
   renderDetections();
-  renderMetrics(metrics);
   renderComparison(comparison);
   queueTabPlotResize("detail");
 }
@@ -626,84 +627,6 @@ function _loadSimilar(detectionId) {
 }
 
 // ── Metrics ──────────────────────────────────────────
-function renderMetrics(metrics) {
-  document.getElementById("metrics-summary").innerHTML = `
-    <div class="stat-card">
-      <div class="stat-label">Total Detections</div>
-      <div class="stat-value">${metrics.total_detections ?? 0}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Discrepancies</div>
-      <div class="stat-value">${metrics.discrepancy_count ?? 0}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">FP / km²</div>
-      <div class="stat-value">${metrics.fp_per_km2 ?? "—"}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">RMSE (m)</div>
-      <div class="stat-value">${metrics.rmse_m ?? "—"}</div>
-    </div>
-  `;
-
-  const typeCounts = metrics.type_counts || {};
-  const qualityTypes = Object.keys(metrics).filter(
-    (key) => metrics[key] && typeof metrics[key] === "object" && "precision" in metrics[key]
-  );
-
-  Plotly.newPlot(
-    "counts-chart",
-    [
-      {
-        type: "bar",
-        x: Object.keys(typeCounts).map((k) => k.replaceAll("_", " ")),
-        y: Object.values(typeCounts),
-        marker: { color: Object.keys(typeCounts).map((key) => palette[key] || "#64748b") },
-      },
-    ],
-    {
-      autosize: true,
-      margin: { l: 36, r: 8, t: 28, b: 56 },
-      title: { text: "Detection Counts", font: { size: 13, family: "Space Grotesk, Avenir Next, sans-serif" } },
-      paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: "rgba(0,0,0,0)",
-      xaxis: { tickfont: { size: 10 }, tickangle: -28, automargin: true },
-      yaxis: { gridcolor: "rgba(0,0,0,0.06)", automargin: true },
-    },
-    { displayModeBar: false, responsive: true }
-  );
-
-  Plotly.newPlot(
-    "quality-chart",
-    qualityTypes.map((type) => ({
-      type: "bar",
-      name: type.replaceAll("_", " "),
-      x: ["precision", "recall", "f1"],
-      y: ["precision", "recall", "f1"].map((m) => metrics[type]?.[m] ?? 0),
-      marker: { color: palette[type] },
-    })),
-    {
-      barmode: "group",
-      autosize: true,
-      margin: { l: 36, r: 8, t: 28, b: 72 },
-      title: { text: "Quality Metrics", font: { size: 13, family: "Space Grotesk, Avenir Next, sans-serif" } },
-      paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: "rgba(0,0,0,0)",
-      xaxis: { automargin: true },
-      yaxis: { range: [0, 1], gridcolor: "rgba(0,0,0,0.06)", automargin: true },
-      legend: {
-        orientation: "h",
-        x: 0,
-        xanchor: "left",
-        y: -0.24,
-        yanchor: "top",
-        font: { size: 9 },
-      },
-    },
-    { displayModeBar: false, responsive: true }
-  );
-}
-
 // ── Comparison ────────────────────────────────────────
 function renderComparison(comparison) {
   document.getElementById("comparison-summary").innerHTML = `
