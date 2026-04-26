@@ -10,7 +10,7 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div>
+        <div class="topbar-brand">
           <h1>GeoSTL Video Intelligence</h1>
           <p>Sidewalk infrastructure inventory</p>
         </div>
@@ -23,43 +23,94 @@
         </section>
 
         <aside class="sidebar">
-          <section class="panel">
+          <!-- Filters always visible -->
+          <section class="panel filters-panel">
             <h2>Filters</h2>
-            <div id="filters-list"></div>
+            <div id="filters-list" class="filters-list"></div>
           </section>
 
-          <section class="panel">
-            <h2>Detection Detail</h2>
-            <div id="detail-empty" class="empty-state">Select a detection on the map.</div>
-            <dl id="detail-card" class="detail-card hidden">
-              <div><dt>Name</dt><dd id="detail-name"></dd></div>
-              <div><dt>Type</dt><dd id="detail-type"></dd></div>
-              <div><dt>Condition</dt><dd id="detail-condition"></dd></div>
-              <div><dt>Confidence</dt><dd id="detail-confidence"></dd></div>
-              <div><dt>Sidewalk Presence</dt><dd id="detail-presence"></dd></div>
-              <div><dt>Width (m)</dt><dd id="detail-width"></dd></div>
-              <div><dt>Curb Ramp</dt><dd id="detail-curb-ramp"></dd></div>
-              <div><dt>Obstructions</dt><dd id="detail-obstructions"></dd></div>
-              <div><dt>Hazards</dt><dd id="detail-hazards"></dd></div>
-              <div><dt>Crossing Features</dt><dd id="detail-crossings"></dd></div>
-              <div><dt>Transport Segment</dt><dd id="detail-transport"></dd></div>
-              <div><dt>Description</dt><dd id="detail-description" style="white-space:pre-wrap;font-size:0.85em;color:#475569;"></dd></div>
-              <div><dt>Clip</dt><dd id="detail-clip"></dd><video id="detail-video" controls style="width:100%;margin-top:6px;display:none;border-radius:6px;"></video></div>
-            </dl>
-          </section>
+          <!-- Tabbed panel -->
+          <section class="panel tabs-panel">
+            <div class="tab-bar">
+              <button class="tab-btn active" data-tab="detail">Detail</button>
+              <button class="tab-btn" data-tab="metrics">Metrics</button>
+              <button class="tab-btn" data-tab="comparison">Comparison</button>
+            </div>
 
-          <section class="panel">
-            <h2>Metrics</h2>
-            <div id="metrics-summary" class="metrics-summary"></div>
-            <div id="counts-chart" class="chart"></div>
-            <div id="quality-chart" class="chart"></div>
-          </section>
+            <!-- Detail Tab -->
+            <div class="tab-content" id="tab-detail">
+              <div id="detail-empty" class="empty-state">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+                <span>Select a detection on the map</span>
+              </div>
+              <div id="detail-card" class="detail-card hidden">
+                <div class="detail-header">
+                  <span id="detail-name" class="detail-title"></span>
+                  <span id="detail-type-badge" class="type-badge"></span>
+                </div>
+                <div class="detail-grid">
+                  <div class="detail-row">
+                    <span class="detail-label">Condition</span>
+                    <span id="detail-condition" class="detail-value"></span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Confidence</span>
+                    <span id="detail-confidence" class="detail-value"></span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Sidewalk</span>
+                    <span id="detail-presence" class="detail-value"></span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Width (m)</span>
+                    <span id="detail-width" class="detail-value"></span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Curb Ramp</span>
+                    <span id="detail-curb-ramp" class="detail-value"></span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Obstructions</span>
+                    <span id="detail-obstructions" class="detail-value"></span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Hazards</span>
+                    <span id="detail-hazards" class="detail-value"></span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Crossings</span>
+                    <span id="detail-crossings" class="detail-value"></span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Transport</span>
+                    <span id="detail-transport" class="detail-value"></span>
+                  </div>
+                </div>
+                <div class="detail-description-block">
+                  <span class="detail-label">Description</span>
+                  <p id="detail-description" class="detail-description"></p>
+                </div>
+                <div class="detail-clip-block">
+                  <span class="detail-label">Clip</span>
+                  <span id="detail-clip" class="detail-value muted"></span>
+                  <video id="detail-video" controls style="display:none;width:100%;border-radius:6px;margin-top:6px;"></video>
+                </div>
+              </div>
+            </div>
 
-          <section class="panel">
-            <h2>Temporal Comparison</h2>
-            <div id="comparison-summary" class="metrics-summary"></div>
-            <div id="comparison-chart" class="chart"></div>
-            <div id="comparison-table" class="comparison-table"></div>
+            <!-- Metrics Tab -->
+            <div class="tab-content hidden" id="tab-metrics">
+              <div id="metrics-summary" class="stat-grid"></div>
+              <div id="counts-chart" class="chart"></div>
+              <div id="quality-chart" class="chart"></div>
+            </div>
+
+            <!-- Comparison Tab -->
+            <div class="tab-content hidden" id="tab-comparison">
+              <div id="comparison-summary" class="stat-grid"></div>
+              <div id="comparison-chart" class="chart"></div>
+              <div id="comparison-table" class="comparison-table"></div>
+            </div>
           </section>
         </aside>
       </main>
