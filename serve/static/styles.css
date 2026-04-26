@@ -112,6 +112,11 @@ body {
   gap: 10px;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.hidden {
+  display: none !important;
 }
 
 .panel {
@@ -529,6 +534,138 @@ body {
   white-space: nowrap;
 }
 
+/* ── Live camera marker ── */
+.camera-marker {
+  position: relative;
+  width: 30px;
+  height: 30px;
+}
+
+.camera-marker-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  background: #e53e3e;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(229, 62, 62, 0.4);
+  z-index: 1;
+}
+
+.camera-marker-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(229, 62, 62, 0.25);
+  animation: camera-pulse 1.8s ease-out infinite;
+}
+
+@keyframes camera-pulse {
+  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
+  80%  { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+}
+
+/* ── Camera sidebar panel ── */
+.camera-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  overflow-y: auto;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius);
+}
+
+.camera-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.camera-panel-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.camera-close-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--muted);
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.camera-close-btn:hover {
+  color: var(--ink);
+}
+
+.camera-embed-wrap {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.camera-embed-wrap iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.camera-analysis {
+  flex: 1;
+}
+
+.camera-analysis-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.camera-timestamp {
+  font-size: 11px;
+}
+
+.camera-analysis-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.camera-condition-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .layout {
@@ -548,3 +685,18 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Human review ── */
+.review-block { border-top: 1px solid var(--panel-border); padding-top: 12px; margin-top: 8px; }
+.review-block-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.review-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: #ebf8ff; color: #2b6cb0; }
+.review-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+.review-select { font-size: 13px; padding: 5px 8px; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel); color: var(--ink); }
+.review-textarea { font-size: 12px; padding: 6px 8px; border: 1px solid var(--panel-border); border-radius: 6px; resize: vertical; font-family: inherit; background: var(--panel); color: var(--ink); }
+.review-actions { display: flex; gap: 8px; margin-top: 4px; }
+.review-summary { display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--accent-light); border-radius: 6px; margin-bottom: 8px; font-size: 12px; }
+.review-status-badge { font-weight: 600; font-size: 11px; }
+.review-status-confirmed { color: #276749; }
+.review-status-corrected { color: #c05621; }
+.review-status-disputed { color: #744210; }
+.review-note { margin: 4px 0 0; color: var(--ink); }

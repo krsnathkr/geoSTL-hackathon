@@ -12,9 +12,10 @@ const palette = {
   surface_hazard: "#8b5cf6",
 };
 
-const map = L.map("map", { zoomControl: true }).setView([40.005, -105.265], 14);
+const map = L.map("map", { zoomControl: true }).setView([37.768, -122.412], 14);
 const markersLayer = L.layerGroup().addTo(map);
 const sequencesLayer = L.layerGroup().addTo(map);
+const camerasLayer = L.layerGroup().addTo(map);
 
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "&copy; OpenStreetMap contributors",
@@ -24,6 +25,105 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 let detections = [];
 let _followupPollTimer = null;
 let _currentDetectionId = null;
+let _reviewedIds = new Set();
+
+// ── Live cameras ──────────────────────────────────────
+function makeCameraIcon() {
+  return L.divIcon({
+    className: "",
+    html: '<div class="camera-marker"><div class="camera-marker-pulse"></div><div class="camera-marker-dot"></div></div>',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -18],
+  });
+}
+
+function renderCameras(cameras) {
+  camerasLayer.clearLayers();
+  cameras.forEach((cam) => {
+    if (cam.lat == null || cam.lon == null) return;
+    const marker = L.marker([cam.lat, cam.lon], { icon: makeCameraIcon() });
+    marker.on("click", () => openCameraPanel(cam));
+    marker.bindTooltip(`📹 ${cam.name}`, { direction: "top", offset: [0, -18] });
+    camerasLayer.addLayer(marker);
+  });
+}
+
+function openCameraPanel(cam) {
+  document.getElementById("camera-panel-name").textContent = cam.name;
+
+  const iframe = document.getElementById("camera-iframe");
+  iframe.src = cam.embed_url || "";
+
+  const tsEl = document.getElementById("camera-analysis-timestamp");
+  tsEl.textContent = cam.analyzed_at
+    ? `Last analyzed ${new Date(cam.analyzed_at).toLocaleTimeString()}`
+    : "Not yet analyzed";
+
+  const bodyEl = document.getElementById("camera-analysis-body");
+  if (!cam.analysis) {
+    bodyEl.innerHTML = '<div class="empty-state">Analysis pending — first run in progress…</div>';
+  } else {
+    const a = cam.analysis;
+    const lists = (arr) => (Array.isArray(arr) && arr.length ? arr.join(", ") : "none");
+    bodyEl.innerHTML = `
+      <div class="detail-row">
+        <span class="detail-label">Condition</span>
+        <span class="camera-condition-badge">${a.condition || "unknown"}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Sidewalk</span>
+        <span class="detail-value">${a.sidewalk_presence || "—"}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Width</span>
+        <span class="detail-value">${a.sidewalk_width_m != null ? a.sidewalk_width_m + " m" : "—"}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Curb Ramp</span>
+        <span class="detail-value">${a.curb_ramp_status || "—"}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Hazards</span>
+        <span class="detail-value">${lists(a.hazards)}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Obstructions</span>
+        <span class="detail-value">${lists(a.obstructions)}</span>
+      </div>
+      <div class="detail-description-block">
+        <span class="detail-label">Description</span>
+        <p class="detail-description">${a.description || ""}</p>
+      </div>
+    `;
+  }
+
+  document.getElementById("camera-panel").classList.remove("hidden");
+  switchTab("live");
+}
+
+function closeCameraPanel() {
+  document.getElementById("camera-panel").classList.add("hidden");
+  document.getElementById("camera-iframe").src = "";
+}
+
+document.getElementById("camera-panel-close").addEventListener("click", closeCameraPanel);
+
+async function fetchAndRenderCameras() {
+  try {
+    const resp = await fetch("/api/cameras");
+    if (!resp.ok) return;
+    const data = await resp.json();
+    renderCameras(data.cameras || []);
+  } catch (_) {
+    // silently skip on network blip
+  }
+}
+
+function startCameraPolling() {
+  fetchAndRenderCameras();
+  setInterval(fetchAndRenderCameras, 30_000);
+}
 
 // ── Tabs ──────────────────────────────────────────────
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -54,6 +154,95 @@ function queueTabPlotResize(tabName) {
   });
 }
 
+// ── Human review ──────────────────────────────────────
+async function loadReviews() {
+  try {
+    const resp = await fetch("/api/reviews");
+    const data = await resp.json();
+    _reviewedIds = new Set(Object.keys(data.reviews || {}));
+  } catch (e) {
+    _reviewedIds = new Set();
+  }
+}
+
+function _resetReviewUI() {
+  document.getElementById("review-badge").classList.add("hidden");
+  document.getElementById("review-existing").classList.add("hidden");
+  document.getElementById("review-existing").innerHTML = "";
+  document.getElementById("review-form").style.display = "";
+  document.getElementById("review-status").value = "confirmed";
+  document.getElementById("review-type").value = "";
+  document.getElementById("review-condition").value = "";
+  document.getElementById("review-notes").value = "";
+  document.getElementById("review-clear-btn").classList.add("hidden");
+}
+
+function _loadExistingReview(detectionId) {
+  if (!detectionId) return;
+  fetch(`/api/events/${encodeURIComponent(detectionId)}/review`)
+    .then(r => r.ok ? r.json() : null)
+    .then(review => { if (review) _renderReview(review); })
+    .catch(() => {});
+}
+
+function _renderReview(review) {
+  document.getElementById("review-badge").classList.remove("hidden");
+  document.getElementById("review-clear-btn").classList.remove("hidden");
+  document.getElementById("review-status").value = review.review_status || "confirmed";
+  document.getElementById("review-type").value = review.override_type || "";
+  document.getElementById("review-condition").value = review.override_condition || "";
+  document.getElementById("review-notes").value = review.notes || "";
+  const el = document.getElementById("review-existing");
+  el.innerHTML = `<div class="review-summary">
+    <span class="review-status-badge review-status-${review.review_status}">${review.review_status}</span>
+    <span class="muted">${new Date(review.reviewed_at).toLocaleString()}</span>
+    ${review.notes ? `<p class="review-note">${review.notes}</p>` : ""}
+  </div>`;
+  el.classList.remove("hidden");
+}
+
+function _wireReviewButtons(detectionId) {
+  ["review-submit-btn", "review-clear-btn"].forEach(id => {
+    const el = document.getElementById(id);
+    const clone = el.cloneNode(true);
+    el.parentNode.replaceChild(clone, el);
+  });
+
+  document.getElementById("review-submit-btn").addEventListener("click", () => {
+    if (detectionId !== _currentDetectionId) return;
+    const payload = {
+      review_status: document.getElementById("review-status").value,
+      override_type: document.getElementById("review-type").value || null,
+      override_condition: document.getElementById("review-condition").value || null,
+      notes: document.getElementById("review-notes").value || null,
+    };
+    fetch(`/api/events/${encodeURIComponent(detectionId)}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(r => r.json())
+      .then(async () => {
+        await loadReviews();
+        renderDetections();
+        _loadExistingReview(detectionId);
+      })
+      .catch(err => console.error("Review save failed:", err));
+  });
+
+  document.getElementById("review-clear-btn").addEventListener("click", () => {
+    if (detectionId !== _currentDetectionId) return;
+    fetch(`/api/events/${encodeURIComponent(detectionId)}/review`, { method: "DELETE" })
+      .then(async () => {
+        await loadReviews();
+        renderDetections();
+        _resetReviewUI();
+        _wireReviewButtons(detectionId);
+      })
+      .catch(err => console.error("Review delete failed:", err));
+  });
+}
+
 // ── Data loading ──────────────────────────────────────
 async function loadData() {
   const [detectionsResponse, metricsResponse, sequencesResponse, comparisonResponse] = await Promise.all([
@@ -69,6 +258,7 @@ async function loadData() {
   const comparison = await comparisonResponse.json();
 
   detections = detectionCollection.features || [];
+  await loadReviews();
   renderFilters(detectionCollection.metadata?.detection_types || []);
   renderStatus(detectionCollection, metrics, sequenceCollection, comparison);
   renderSequences(sequenceCollection.features || []);
@@ -160,10 +350,13 @@ function renderDetections() {
       const [lon, lat] = feature.geometry.coordinates;
       bounds.push([lat, lon]);
 
+      const detId = feature.properties.detection_id || feature.properties.obs_id;
+      const isReviewed = _reviewedIds.has(detId);
       const marker = L.circleMarker([lat, lon], {
         radius: 7,
-        color: palette[feature.properties.detection_type] || "#334155",
-        weight: 2,
+        color: isReviewed ? "#fff" : (palette[feature.properties.detection_type] || "#334155"),
+        weight: isReviewed ? 4 : 2,
+        fillColor: palette[feature.properties.detection_type] || "#334155",
         fillOpacity: 0.85,
       });
 
@@ -236,6 +429,9 @@ function showDetail(feature) {
   _resetFollowupUI();
   _loadExistingFollowup(_currentDetectionId);
   _wireUploadButton(_currentDetectionId);
+  _resetReviewUI();
+  _loadExistingReview(_currentDetectionId);
+  _wireReviewButtons(_currentDetectionId);
 }
 
 function _resetFollowupUI() {
@@ -591,3 +787,5 @@ loadData().catch((error) => {
   document.getElementById("status-pill").textContent = "Error";
   console.error(error);
 });
+
+startCameraPolling();

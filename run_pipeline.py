@@ -126,6 +126,7 @@ def run_pipeline(
             duplicate_single_frame=True,
             output_filename="baseline_descriptions.json",
             s3_prefix="baseline-clips/",
+            frame_duration_sec=4.0,  # 2 frames × 4s = 8s clip — avoids Pegasus min-duration rejection
         )
         context["baseline_descriptions"] = baseline_descriptions
 
@@ -145,19 +146,19 @@ def run_pipeline(
         logger.info("Stage analyze: cross-referencing observations")
         detections = cross_reference(descriptions, transport_segments)
         baseline_detections = cross_reference(baseline_descriptions, transport_segments)
-        export_paths = export_all(detections, output_dir=data_output_dir, exclude_validated=True)
+        export_paths = export_all(detections, output_dir=data_output_dir, exclude_validated=False)
         baseline_export_paths = {
             "geojson": to_geojson(
                 baseline_detections,
                 output_dir=data_output_dir,
                 filename="baseline_detections.geojson",
-                exclude_validated=True,
+                exclude_validated=False,  # keep all types so comparison tab has real data
             ),
             "geoparquet": to_geoparquet(
                 baseline_detections,
                 output_dir=data_output_dir,
                 filename="baseline_detections.geoparquet",
-                exclude_validated=True,
+                exclude_validated=False,
             ),
         }
         metrics = compute_and_save(

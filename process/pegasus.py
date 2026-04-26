@@ -275,6 +275,7 @@ def process_sequence_clip(
     frame_meta: list[dict],
     s3_prefix: str = "clips/",
     bucket: str = S3_WORKSHOP_BUCKET,
+    frame_duration_sec: float = CLIP_FRAME_DURATION_SEC,
     client=None,
 ) -> dict:
     """
@@ -285,7 +286,7 @@ def process_sequence_clip(
     """
     clip_path = None
     try:
-        clip_path = frames_to_clip(frame_paths)
+        clip_path = frames_to_clip(frame_paths, frame_duration_sec=frame_duration_sec)
         s3_key = f"{s3_prefix}{sequence_id}.mp4"
         s3_uri = upload_to_s3(clip_path, s3_key, bucket=bucket)
 
@@ -335,6 +336,7 @@ def process_all_sequences(
     duplicate_single_frame: bool = False,
     output_filename: str = "descriptions.json",
     s3_prefix: str = "clips/",
+    frame_duration_sec: float = CLIP_FRAME_DURATION_SEC,
     client=None,
 ) -> list[dict]:
     """
@@ -381,6 +383,7 @@ def process_all_sequences(
                 list(paths),
                 list(metas),
                 s3_prefix=s3_prefix,
+                frame_duration_sec=frame_duration_sec,
                 client=client,
             )
             all_results.append(result)

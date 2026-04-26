@@ -63,3 +63,17 @@ OVERTURE_S3_BASE = f"s3://overturemaps-us-west-2/release/{OVERTURE_RELEASE}"
 DATA_RAW = "data/raw"
 DATA_PROCESSED = "data/processed"
 DATA_OUTPUT = "data/output"
+
+LIVE_CAMERAS_OUTPUT = "data/output/live_cameras.json"
+LIVE_CAMERA_INTERVAL_SEC = 300       # 5 minutes between analysis runs
+LIVE_CAMERA_CLIP_DURATION_SEC = 30   # seconds of stream to capture per run
+
+LIVE_CAMERAS = [
+    {
+        "id": "mission_cam_1",
+        "name": "Mission District Live",
+        "lat": 37.7648,
+        "lon": -122.4215,
+        "youtube_url": "https://www.youtube.com/watch?v=G8RIAgPxaMc",
+    },
+]

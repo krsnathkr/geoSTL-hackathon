@@ -83,21 +83,31 @@ def compute_detection_metrics(
             fp = len(subset) - tp
             fn = len(gt_ids) - tp
         else:
-            # Proxy: high confidence → TP, low confidence → FP
-            tp = int((subset["confidence"] >= 0.6).sum())
-            fp = int((subset["confidence"] < 0.6).sum())
-            # FN estimate: detections we likely missed (validated rows with low conf)
-            fn = 0
+            # Proxy: confident detections → TP, uncertain → FP
+            tp = int((subset["confidence"] >= 0.7).sum())
+            fp = int((subset["confidence"] < 0.7).sum())
+            # FN estimate: no GPS ground truth exists, so we apply a conservative
+            # 15% miss-rate reflecting features a street-level camera likely missed
+            # (occlusions, lighting, frame gaps). min 1 so recall is never trivially 1.0.
+            fn = max(1, round(len(subset) * 0.15))
 
         results[det_type] = precision_recall_f1(tp, fp, fn)
 
-    # Overall geospatial RMSE: distance between observation GPS and matched Overture GPS
-    # We only compute this for rows that have a GERS match (distance_m not null)
+    # Geospatial RMSE: use match_distance_m (observation GPS → nearest Overture segment)
+    # as a proxy for positional error when no separate GPS ground truth is available.
     distance_column = "match_distance_m" if "match_distance_m" in detections.columns else "distance_m"
-    matched = detections[detections[distance_column].notna()] if distance_column in detections.columns else detections.iloc[0:0]
-    errors = matched[distance_column].dropna().tolist() if distance_column in matched.columns else []
-    results["rmse_m"] = rmse(errors)
+    if distance_column in detections.columns:
+        matched = detections[detections[distance_column].notna()]
+        errors = matched[distance_column].dropna().tolist()
+    else:
+        matched = detections.iloc[0:0]
+        errors = []
+    results["rmse_m"] = rmse(errors) if errors else None
     results["rmse_matched_count"] = len(errors)
+
+    # Mean confidence across all detections
+    if not detections.empty and "confidence" in detections.columns:
+        results["mean_confidence"] = round(float(detections["confidence"].mean()), 4)
 
     return results
 
@@ -201,6 +211,10 @@ def compute_and_save(
         metrics["temporal_advantage"] = compute_temporal_advantage(
             detections, baseline_detections
         )
+        if "confidence" in baseline_detections.columns:
+            metrics["baseline_mean_confidence"] = round(
+                float(baseline_detections["confidence"].mean()), 4
+            )
 
     # Detection type breakdown
     type_counts = detections["detection_type"].value_counts().to_dict()

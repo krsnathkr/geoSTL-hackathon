@@ -145,7 +145,10 @@ def build_comparison_payload(
             "delta",
             sum(video_counts.values()) - sum(baseline_counts.values()),
         ),
-        "confidence_delta": temporal_advantage.get("confidence_delta"),
+        "confidence_delta": (
+            temporal_advantage.get("confidence_delta")
+            or _confidence_delta_from_metrics(metrics)
+        ),
         "by_type": by_type,
     }
 
@@ -202,6 +205,14 @@ def empty_feature_collection(
         "metadata": metadata or {},
         "features": features or [],
     }
+
+
+def _confidence_delta_from_metrics(metrics: dict[str, Any]) -> float | None:
+    video_conf = metrics.get("mean_confidence")
+    baseline_conf = metrics.get("baseline_mean_confidence")
+    if video_conf is not None and baseline_conf is not None:
+        return round(video_conf - baseline_conf, 4)
+    return None
 
 
 def count_detection_types(features: list[dict[str, Any]]) -> dict[str, int]:

@@ -35,6 +35,7 @@
               <button class="tab-btn active" data-tab="detail">Detail</button>
               <button class="tab-btn" data-tab="metrics">Metrics</button>
               <button class="tab-btn" data-tab="comparison">Comparison</button>
+              <button class="tab-btn" data-tab="live">Live</button>
             </div>
 
             <!-- Detail Tab -->
@@ -109,6 +110,58 @@
                   <video id="followup-video" controls style="display:none;width:100%;border-radius:6px;margin-top:6px;"></video>
                   <div id="followup-results" class="hidden"></div>
                 </div>
+                <div class="review-block">
+                  <div class="review-block-header">
+                    <span class="detail-label">Human Review</span>
+                    <span id="review-badge" class="review-badge hidden">Reviewed</span>
+                  </div>
+                  <div id="review-existing" class="hidden"></div>
+                  <div id="review-form">
+                    <div class="review-field">
+                      <label class="detail-label" for="review-status">Status</label>
+                      <select id="review-status" class="review-select">
+                        <option value="confirmed">Confirmed — AI is correct</option>
+                        <option value="corrected">Corrected — changing fields below</option>
+                        <option value="disputed">Disputed — unsure</option>
+                      </select>
+                    </div>
+                    <div class="review-field">
+                      <label class="detail-label" for="review-type">Override Type</label>
+                      <select id="review-type" class="review-select">
+                        <option value="">— no change —</option>
+                        <option value="sidewalk_present">sidewalk present</option>
+                        <option value="sidewalk_missing">sidewalk missing</option>
+                        <option value="sidewalk_unclear">sidewalk unclear</option>
+                        <option value="obstruction">obstruction</option>
+                        <option value="pothole">pothole</option>
+                        <option value="poor_condition">poor condition</option>
+                        <option value="fair_condition">fair condition</option>
+                        <option value="curb_ramp_missing">curb ramp missing</option>
+                        <option value="surface_defect">surface defect</option>
+                        <option value="surface_hazard">surface hazard</option>
+                        <option value="poor_lighting">poor lighting</option>
+                      </select>
+                    </div>
+                    <div class="review-field">
+                      <label class="detail-label" for="review-condition">Override Condition</label>
+                      <select id="review-condition" class="review-select">
+                        <option value="">— no change —</option>
+                        <option value="good">good</option>
+                        <option value="fair">fair</option>
+                        <option value="poor">poor</option>
+                        <option value="unknown">unknown</option>
+                      </select>
+                    </div>
+                    <div class="review-field">
+                      <label class="detail-label" for="review-notes">Notes</label>
+                      <textarea id="review-notes" class="review-textarea" rows="2" placeholder="Optional field notes…"></textarea>
+                    </div>
+                    <div class="review-actions">
+                      <button id="review-submit-btn" class="followup-btn">Save Review</button>
+                      <button id="review-clear-btn" class="followup-btn followup-btn-danger hidden">Clear Review</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -124,6 +177,40 @@
               <div id="comparison-summary" class="stat-grid"></div>
               <div id="comparison-chart" class="chart"></div>
               <div id="comparison-table" class="comparison-table"></div>
+            </div>
+
+            <!-- Live Tab -->
+            <div class="tab-content hidden" id="tab-live">
+              <div class="empty-state">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.314 3.134-6 7-6s7 2.686 7 6"/></svg>
+                <span>Click a live camera marker on the map</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Camera live panel — overlays the sidebar when a camera is clicked -->
+          <section id="camera-panel" class="camera-panel hidden">
+            <div class="camera-panel-header">
+              <h2 id="camera-panel-name">Live Camera</h2>
+              <button id="camera-panel-close" class="camera-close-btn" aria-label="Close">&times;</button>
+            </div>
+            <div class="camera-embed-wrap">
+              <iframe
+                id="camera-iframe"
+                src=""
+                frameborder="0"
+                allow="autoplay; encrypted-media"
+                allowfullscreen
+              ></iframe>
+            </div>
+            <div class="camera-analysis">
+              <div class="camera-analysis-header">
+                <span class="detail-label">AI Analysis</span>
+                <span id="camera-analysis-timestamp" class="camera-timestamp muted"></span>
+              </div>
+              <div id="camera-analysis-body" class="camera-analysis-body">
+                <div class="empty-state">Analysis pending…</div>
+              </div>
             </div>
           </section>
         </aside>
